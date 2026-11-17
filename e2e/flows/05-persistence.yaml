@@ -1,0 +1,14 @@
+appId: host.exp.exponent
+---
+# Kill Expo Go and reload: steps, wallet and city must come back from storage.
+- runFlow: shared/open-app.yaml
+- assertVisible:
+    id: steps-today
+    text: "500"
+- tapOn:
+    id: tab-shop
+- assertVisible: "2,500"
+- tapOn:
+    id: tab-city
+- assertVisible: "1 of 144 lots built"
+- takeScreenshot: 05-after-restart

@@ -1,0 +1,50 @@
+appId: host.exp.exponent
+---
+- tapOn:
+    id: tab-city
+- assertVisible: "0 of 144 lots built"
+- takeScreenshot: 04-city-inventory
+
+# Pick the first building in the inventory (pack contents are random).
+- tapOn:
+    id: "inventory-.*"
+    index: 0
+    retryTapIfNoChange: false
+- assertVisible: "Tap an empty lot to build"
+
+# Centre of the map is on the lawn.
+- tapOn:
+    id: city-map
+    retryTapIfNoChange: false
+- assertVisible: "1 of 144 lots built"
+- waitForAnimationToEnd
+- takeScreenshot: 04-city-placed
+
+# Tap it again to select it, then send it back to the inventory.
+- tapOn:
+    id: city-map
+    retryTapIfNoChange: false
+- tapOn:
+    id: remove-building
+    retryTapIfNoChange: false
+- assertVisible: "0 of 144 lots built"
+
+# Place it once more so the persistence flow has something to check.
+- tapOn:
+    id: "inventory-.*"
+    index: 0
+    retryTapIfNoChange: false
+- tapOn:
+    id: city-map
+    retryTapIfNoChange: false
+- assertVisible: "1 of 144 lots built"
+
+# Zoom controls
+- tapOn:
+    id: city-zoom-in
+- tapOn:
+    id: city-zoom-in
+- waitForAnimationToEnd
+- takeScreenshot: 04-city-zoomed
+- tapOn:
+    id: city-recenter

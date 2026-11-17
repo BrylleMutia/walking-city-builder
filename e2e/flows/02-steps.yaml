@@ -1,0 +1,15 @@
+appId: host.exp.exponent
+---
+- tapOn:
+    id: tab-index
+- assertVisible:
+    id: steps-today
+    text: "0"
+- tapOn:
+    id: walk-500
+    retryTapIfNoChange: false
+- assertVisible:
+    id: steps-today
+    text: "500"
+- assertVisible: "3,500"
+- takeScreenshot: 02-after-walk

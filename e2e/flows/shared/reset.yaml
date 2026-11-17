@@ -1,0 +1,21 @@
+# Profile → Testing → Reset all data, so the run starts as a fresh player.
+appId: host.exp.exponent
+---
+- tapOn:
+    id: tab-profile
+- scrollUntilVisible:
+    element:
+      id: reset-data
+    direction: DOWN
+- tapOn:
+    id: reset-data
+    retryTapIfNoChange: false
+- tapOn:
+    # Positive button of the native confirm dialog ("Reset").
+    id: android:id/button1
+    retryTapIfNoChange: false
+- tapOn:
+    id: tab-index
+- assertVisible:
+    id: steps-today
+    text: "0"

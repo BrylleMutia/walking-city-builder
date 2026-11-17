@@ -1,0 +1,11 @@
+# Suite settings. Only the flows at this level run as tests; shared/ holds
+# sub-flows they call. Flows run in this order and share app state.
+executionOrder:
+  continueOnFailure: false
+  flowsOrder:
+    - 00-reset
+    - 01-tabs
+    - 02-steps
+    - 03-buy-and-open
+    - 04-city-place
+    - 05-persistence

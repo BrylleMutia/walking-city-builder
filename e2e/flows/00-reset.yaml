@@ -1,0 +1,5 @@
+appId: host.exp.exponent
+---
+- runFlow: shared/open-app.yaml
+- runFlow: shared/reset.yaml
+- takeScreenshot: 00-home-fresh

@@ -1,0 +1,34 @@
+# Cold-starts Expo Go and loads this project from Metro on the host machine.
+# start-app.ps1 maps the host's Metro port into the emulator with adb reverse,
+# so the emulator reaches it as localhost.
+appId: host.exp.exponent
+env:
+  # run.ps1 passes the real URL; 8082 is the tests' own Metro.
+  METRO_URL: exp://localhost:8082
+---
+- stopApp
+
+# Right after a force-stop, Android sometimes drops the "open project" link:
+# you land on the phone's home screen or Expo Go's own home screen instead.
+# So send the link and wait for the app, retrying a couple of times.
+- retry:
+    maxRetries: 3
+    commands:
+      - openLink: ${METRO_URL}?__expo_disable_fab=1&__expo_disable_onboarding=1
+      # The app's greeting, or Expo Go's developer menu covering it.
+      # (Not the project name: Expo Go's home screen lists it too.)
+      - extendedWaitUntil:
+          visible: "Welcome back.*|Toggle performance monitor"
+          timeout: 60000
+
+# Expo Go opens its developer menu on first launch; close it if it's there.
+- runFlow:
+    when:
+      visible: "Toggle performance monitor"
+    commands:
+      - back
+- extendedWaitUntil:
+    visible:
+      id: tab-index
+    timeout: 30000
+- waitForAnimationToEnd
