@@ -1,0 +1,79 @@
+import { getItem } from '../data/items';
+import type { Rarity } from '../data/rarity';
+import type { ItemId } from '../data/sets/cozyDowntown';
+import type { PackCard } from '../logic/openPack';
+import type { GameData, Owned, Placed } from './gameLogic';
+
+/** Shape of `get_my_state()` from the database. */
+export interface ServerState {
+  profile: {
+    display_name: string;
+    step_goal: number;
+    balance: number;
+    lifetime_steps: number;
+    packs_opened: number;
+    is_tester: boolean;
+  } | null;
+  /** day (YYYY-MM-DD) → steps */
+  steps: Record<string, number>;
+  inventory: Record<string, { count: number; foil: number }>;
+  city: { x: number; y: number; item_id: string }[];
+}
+
+/** One card as returned by `buy_pack()`. */
+export interface ServerCard {
+  position: number;
+  item_id: string;
+  rarity: string;
+  foil: boolean;
+}
+
+/**
+ * Replaces the local game data with the server's (the server is authoritative).
+ * Ids the app doesn't know yet (e.g. a set added on the server before an app
+ * update) are skipped rather than crashing the UI.
+ */
+export function applyServerState<T extends GameData>(s: T, server: ServerState, today: string): T {
+  const history: Record<string, number> = {};
+  for (const [day, steps] of Object.entries(server.steps)) {
+    if (day !== today && steps > 0) history[day] = steps;
+  }
+
+  const collection: Partial<Record<ItemId, Owned>> = {};
+  for (const [id, owned] of Object.entries(server.inventory)) {
+    if (getItem(id as ItemId)) collection[id as ItemId] = { count: owned.count, foil: owned.foil };
+  }
+
+  const city: Placed[] = server.city
+    .filter((t) => getItem(t.item_id as ItemId))
+    .map((t) => ({ itemId: t.item_id as ItemId, x: t.x, y: t.y }));
+
+  const p = server.profile;
+  return {
+    ...s,
+    dateKey: today,
+    stepsToday: server.steps[today] ?? 0,
+    history,
+    collection,
+    city,
+    ...(p
+      ? {
+          balance: p.balance,
+          goal: p.step_goal,
+          lifetimeSteps: p.lifetime_steps,
+          packsOpened: p.packs_opened,
+        }
+      : {}),
+  };
+}
+
+/** Turns server-rolled cards into the app's PackCard objects (already sorted). */
+export function toPackCards(cards: ServerCard[]): PackCard[] {
+  return [...cards]
+    .sort((a, b) => a.position - b.position)
+    .flatMap((c) => {
+      const item = getItem(c.item_id as ItemId);
+      if (!item) return [];
+      return [{ uid: `${c.position}-${c.item_id}`, item, rarity: c.rarity as Rarity, foil: c.foil }];
+    });
+}
