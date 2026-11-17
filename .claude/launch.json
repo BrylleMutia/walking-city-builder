@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "expo-phone",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["expo", "start", "--tunnel", "--port", "8081"],
+      "port": 8081
+    },
+    {
+      "name": "expo-emulator",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["expo", "start", "--port", "8082"],
+      "port": 8082
+    }
+  ]
+}
