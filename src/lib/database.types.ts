@@ -82,9 +82,9 @@ export type Database = {
         ]
       }
       profiles: {
-        Row: { balance: number; created_at: string; display_name: string; id: string; is_tester: boolean; lifetime_steps: number; packs_opened: number; step_goal: number; updated_at: string }
-        Insert: { balance?: number; created_at?: string; display_name?: string; id: string; is_tester?: boolean; lifetime_steps?: number; packs_opened?: number; step_goal?: number; updated_at?: string }
-        Update: { balance?: number; created_at?: string; display_name?: string; id?: string; is_tester?: boolean; lifetime_steps?: number; packs_opened?: number; step_goal?: number; updated_at?: string }
+        Row: { avatar_id: string; balance: number; created_at: string; display_name: string; id: string; is_tester: boolean; lifetime_steps: number; packs_opened: number; step_goal: number; updated_at: string }
+        Insert: { avatar_id?: string; balance?: number; created_at?: string; display_name?: string; id: string; is_tester?: boolean; lifetime_steps?: number; packs_opened?: number; step_goal?: number; updated_at?: string }
+        Update: { avatar_id?: string; balance?: number; created_at?: string; display_name?: string; id?: string; is_tester?: boolean; lifetime_steps?: number; packs_opened?: number; step_goal?: number; updated_at?: string }
         Relationships: []
       }
       rarities: {
@@ -101,11 +101,12 @@ export type Database = {
         Returns: Json
       }
       get_my_state: { Args: { p_since?: string }; Returns: Json }
+      move_item: { Args: { p_from_x: number; p_from_y: number; p_to_x: number; p_to_y: number }; Returns: Json }
       place_item: { Args: { p_item_id: string; p_x: number; p_y: number }; Returns: Json }
       remove_item: { Args: { p_x: number; p_y: number }; Returns: Json }
       reset_progress: { Args: never; Returns: Json }
       sync_steps: { Args: { p_day: string; p_steps: number }; Returns: Json }
-      update_profile: { Args: { p_display_name?: string; p_step_goal?: number }; Returns: Json }
+      update_profile: { Args: { p_avatar_id?: string; p_display_name?: string; p_step_goal?: number }; Returns: Json }
     }
     Enums: { [_ in never]: never }
     CompositeTypes: { [_ in never]: never }
