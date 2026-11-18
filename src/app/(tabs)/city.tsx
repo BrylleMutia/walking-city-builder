@@ -1,15 +1,16 @@
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Canvas } from '@shopify/react-native-skia';
 import { router } from 'expo-router';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import Animated, { FadeInDown, FadeOutDown, LinearTransition } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useShallow } from 'zustand/react/shallow';
 
 import { CityMap, type CityMapHandle } from '../../components/city/CityMap';
 import { ItemArt } from '../../components/items/ItemArt';
 import { AppText } from '../../components/ui/AppText';
-import { Card, IconButton, Meta } from '../../components/ui/kit';
+import { Card, Meta } from '../../components/ui/kit';
 import { Tap } from '../../components/ui/Tap';
 import { RARITY_COLOR, RARITY_LABEL } from '../../data/rarity';
 import { cozyDowntown, type ItemDef, type ItemId } from '../../data/sets/cozyDowntown';
@@ -25,13 +26,19 @@ const ITEMS: Record<ItemId, ItemDef> = Object.fromEntries(
 type Selection =
   | { kind: 'item'; itemId: ItemId }
   | { kind: 'tile'; x: number; y: number }
+  /** "Move" was tapped for the object on this lot: the next lot tap moves (or swaps) it. */
+  | { kind: 'moving'; x: number; y: number }
   | null;
 
 export default function CityScreen() {
   const insets = useSafeAreaInsets();
   const map = useRef<CityMapHandle>(null);
-  const state = useGameStore();
+  // City and inventory only: step syncs and other store changes don't touch
+  // this screen (the Skia map is its most expensive render).
+  const state = useGameStore(useShallow((s) => ({ city: s.city, collection: s.collection })));
+  const removeAt = useGameStore((s) => s.removeAt);
   const [sel, setSel] = useState<Selection>(null);
+  const [view, setView] = useState<'iso' | 'top'>('iso');
 
   const inventory = useMemo(
     () =>
@@ -44,7 +51,7 @@ export default function CityScreen() {
     [state],
   );
 
-  const selectedTile = sel?.kind === 'tile' ? sel : null;
+  const selectedTile = sel?.kind === 'tile' || sel?.kind === 'moving' ? { x: sel.x, y: sel.y } : null;
   const tileBuilding = selectedTile ? tileAt(state, selectedTile.x, selectedTile.y) : undefined;
 
   const onTileTap = useCallback(
@@ -54,6 +61,19 @@ export default function CityScreen() {
         return;
       }
       const s = useGameStore.getState();
+      if (sel?.kind === 'moving') {
+        if (x === sel.x && y === sel.y) {
+          setSel({ kind: 'tile', x, y });
+          return;
+        }
+        if (s.moveItem(sel.x, sel.y, x, y)) {
+          haptic.medium();
+          setSel({ kind: 'tile', x, y });
+        } else {
+          haptic.warning();
+        }
+        return;
+      }
       const occupant = tileAt(s, x, y);
       if (occupant) {
         haptic.tick();
@@ -77,9 +97,25 @@ export default function CityScreen() {
     [sel],
   );
 
+  /** Drag-and-drop in the top view (a taken lot swaps the two objects). */
+  const onMove = useCallback((fx: number, fy: number, tx: number, ty: number) => {
+    if (!useGameStore.getState().moveItem(fx, fy, tx, ty)) {
+      haptic.warning();
+      return;
+    }
+    haptic.medium();
+    // Keep a selected object selected where it landed.
+    setSel((cur) => (cur?.kind === 'tile' && cur.x === fx && cur.y === fy ? { kind: 'tile', x: tx, y: ty } : cur));
+  }, []);
+
+  const toggleView = () => {
+    haptic.medium();
+    setView((v) => (v === 'iso' ? 'top' : 'iso'));
+  };
+
   const removeSelected = () => {
     if (!selectedTile) return;
-    if (state.removeAt(selectedTile.x, selectedTile.y)) {
+    if (removeAt(selectedTile.x, selectedTile.y)) {
       haptic.light();
       setSel(null);
     }
@@ -87,6 +123,7 @@ export default function CityScreen() {
 
   const focusItem: ItemDef | undefined =
     sel?.kind === 'item' ? ITEMS[sel.itemId] : tileBuilding ? ITEMS[tileBuilding.itemId] : undefined;
+  const moving = sel?.kind === 'moving';
 
   return (
     <View className="flex-1 bg-canvas">
@@ -107,23 +144,37 @@ export default function CityScreen() {
             label={`${state.city.length} of ${GRID_SIZE * GRID_SIZE} lots built`}
           />
         </View>
-        <IconButton
-          icon="maximize"
-          onPress={() => map.current?.recenter()}
-          accessibilityLabel="Recenter"
-          testID="city-recenter"
-        />
       </View>
 
       {/* map */}
       <View className="flex-1 mt-4 mx-3 rounded-card overflow-hidden bg-mint-soft">
-        <CityMap ref={map} placed={state.city} selected={selectedTile} onTileTap={onTileTap} />
+        <CityMap
+          ref={map}
+          placed={state.city}
+          selected={selectedTile}
+          view={view}
+          onTileTap={onTileTap}
+          onMove={onMove}
+        />
 
         {/* zoom control */}
         <View
           className="absolute right-3 top-3 bg-card rounded-chip overflow-hidden"
           style={cardShadow}
         >
+          <Tap
+            onPress={toggleView}
+            testID="city-view-toggle"
+            accessibilityLabel={view === 'iso' ? 'Top-down view' : '3D view'}
+            className="w-11 h-11 items-center justify-center"
+          >
+            <MaterialCommunityIcons
+              name={view === 'iso' ? 'view-grid-outline' : 'cube-outline'}
+              size={21}
+              color={colors.primary.dark}
+            />
+          </Tap>
+          <View className="h-px bg-line mx-2" />
           <Tap onPress={() => map.current?.zoomBy(1.3)} testID="city-zoom-in" haptics="tick" className="w-11 h-11 items-center justify-center">
             <Feather name="plus" size={20} color={colors.ink.DEFAULT} />
           </Tap>
@@ -133,8 +184,22 @@ export default function CityScreen() {
           </Tap>
         </View>
 
+        {/* recenter: back to the whole lawn, centred, at the default zoom (map-app style) */}
+        <Tap
+          onPress={() => map.current?.recenter()}
+          testID="city-recenter"
+          accessibilityLabel="Recenter the city"
+          haptics="tick"
+          // Below the control column: 12 inset + 3 buttons × 44 + 2 dividers, then a 10 gap.
+          style={{ position: 'absolute', right: 12, top: 12 + 3 * 44 + 2 + 10 }}
+          className="bg-card rounded-full w-11 h-11 items-center justify-center"
+          surfaceStyle={cardShadow}
+        >
+          <Feather name="crosshair" size={20} color={colors.primary.dark} />
+        </Tap>
+
         {/* "You" style hint bubble */}
-        {sel?.kind === 'item' && (
+        {(sel?.kind === 'item' || sel?.kind === 'moving' || (view === 'top' && !sel)) && (
           <Animated.View
             entering={FadeInDown.springify().damping(16)}
             exiting={FadeOutDown.duration(150)}
@@ -142,7 +207,11 @@ export default function CityScreen() {
             style={cardShadow}
           >
             <AppText weight="semi" className="text-xs">
-              Tap an empty lot to build
+              {sel?.kind === 'item'
+                ? 'Tap an empty lot to build'
+                : sel?.kind === 'moving'
+                  ? 'Tap a lot to move it here, or a building to swap'
+                  : 'Hold and drag to move · drop on a building to swap'}
             </AppText>
           </Animated.View>
         )}
@@ -151,7 +220,7 @@ export default function CityScreen() {
         <View className="absolute left-3 right-3 bottom-3">
           {focusItem ? (
             <Animated.View
-              key={sel?.kind === 'tile' ? `t${sel.x}-${sel.y}` : `i${focusItem.id}`}
+              key={sel?.kind === 'tile' || sel?.kind === 'moving' ? `t${sel.x}-${sel.y}` : `i${focusItem.id}`}
               entering={FadeInDown.springify().damping(15)}
               layout={LinearTransition.springify()}
             >
@@ -172,8 +241,19 @@ export default function CityScreen() {
                     {RARITY_LABEL[focusItem.rarity]} · {focusItem.flavor}
                   </AppText>
                   <View className="flex-row mt-2">
-                    {tileBuilding ? (
-                      <Chip icon="corner-up-left" label="Return to inventory" onPress={removeSelected} testID="remove-building" />
+                    {moving ? (
+                      <Chip icon="x" label="Cancel move" onPress={() => selectedTile && setSel({ kind: 'tile', ...selectedTile })} testID="cancel-move" />
+                    ) : tileBuilding ? (
+                      <>
+                        <Chip
+                          icon="move"
+                          label="Move"
+                          onPress={() => selectedTile && setSel({ kind: 'moving', ...selectedTile })}
+                          testID="move-building"
+                        />
+                        <View className="w-2" />
+                        <Chip icon="corner-up-left" label="Return" onPress={removeSelected} testID="remove-building" />
+                      </>
                     ) : (
                       <Chip
                         icon="map-pin"
