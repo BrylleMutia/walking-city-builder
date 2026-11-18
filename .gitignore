@@ -42,3 +42,6 @@ yarn-error.*
 
 # end-to-end test screenshots, reports and logs
 e2e-artifacts/
+
+# Local dev-build APKs
+/builds

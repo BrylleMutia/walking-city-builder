@@ -4,13 +4,13 @@
     {
       "name": "expo-phone",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["expo", "start", "--tunnel", "--port", "8081"],
+      "runtimeArgs": ["expo", "start", "--dev-client", "--tunnel", "--port", "8081"],
       "port": 8081
     },
     {
       "name": "expo-emulator",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["expo", "start", "--port", "8082"],
+      "runtimeArgs": ["expo", "start", "--go", "--port", "8082"],
       "port": 8082
     }
   ]
