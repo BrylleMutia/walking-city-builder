@@ -1,0 +1,32 @@
+# Walks through the first-run onboarding with defaults: skip the slides,
+# name "Walker", allow step counting (unavailable in Expo Go on Android), keep the goal,
+# skip account creation. Ends on Home.
+appId: host.exp.exponent
+---
+- tapOn:
+    id: onboarding-skip
+- tapOn:
+    id: name-input
+- inputText: "Walker"
+- hideKeyboard
+- tapOn:
+    id: name-continue
+- tapOn:
+    id: steps-allow
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible:
+      id: steps-continue
+      enabled: true
+    timeout: 10000
+- tapOn:
+    id: steps-continue
+- tapOn:
+    id: goal-continue
+- tapOn:
+    id: save-skip
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible:
+      id: tab-index
+    timeout: 10000

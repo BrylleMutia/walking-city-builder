@@ -2,7 +2,9 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { ScrollView, View, useWindowDimensions } from 'react-native';
+import { useShallow } from 'zustand/react/shallow';
 
+import { AnimatedCounter } from '../../components/ui/AnimatedCounter';
 import { AppText } from '../../components/ui/AppText';
 import { Avatar, HERO_ASPECT, HomeHeroArt } from '../../components/ui/illustrations';
 import {
@@ -32,7 +34,23 @@ const HERO_ART_TOP_PAD = 0.07;
 
 export default function HomeScreen() {
   const { width } = useWindowDimensions();
-  const s = useGameStore();
+  // Only the fields this screen shows: a narrow, shallow-compared slice means
+  // a change elsewhere in the store (city, collection, cloud status) doesn't
+  // re-render Home.
+  const s = useGameStore(
+    useShallow((st) => ({
+      dateKey: st.dateKey,
+      stepsToday: st.stepsToday,
+      history: st.history,
+      goal: st.goal,
+      balance: st.balance,
+      displayName: st.displayName,
+      avatarId: st.avatarId,
+      cityCount: st.city.length,
+      sensor: st.sensor,
+      addSteps: st.addSteps,
+    })),
+  );
   const pct = s.goal > 0 ? s.stepsToday / s.goal : 0;
   const toGo = Math.max(0, s.goal - s.stepsToday);
   const cheapest = Math.min(...SET_LISTINGS.filter((l) => l.set).map((l) => l.price));
@@ -53,14 +71,14 @@ export default function HomeScreen() {
       {/* greeting */}
       <View className="flex-row items-center">
         <View className="rounded-full overflow-hidden">
-          <Avatar size={52} />
+          <Avatar size={52} variant={s.avatarId} />
         </View>
         <View className="flex-1 ml-3">
           <AppText tone="muted" className="text-sm">
             Welcome back 👋
           </AppText>
-          <AppText weight="heavy" className="text-xl">
-            Walker
+          <AppText weight="heavy" className="text-xl" numberOfLines={1} testID="home-name">
+            {s.displayName}
           </AppText>
         </View>
         <IconButton icon="bell" dot accessibilityLabel="Notifications" />
@@ -86,9 +104,7 @@ export default function HomeScreen() {
             </AppText>
           </ProgressRing>
           <View className="flex-1 ml-3.5">
-            <AppText weight="heavy" className="text-2xl" testID="steps-today">
-              {formatNumber(s.stepsToday)}
-            </AppText>
+            <AnimatedCounter value={s.stepsToday} size={24} testID="steps-today" />
             <AppText tone="muted" className="text-xs">
               {toGo > 0
                 ? `steps today · ${formatNumber(toGo)} to your goal`
@@ -178,7 +194,7 @@ export default function HomeScreen() {
 
         <ActivityCard
           title="My city"
-          meta={`${s.city.length} placed`}
+          meta={`${s.cityCount} placed`}
           metaIcon="map"
           bg="bg-primary-soft"
           onPress={() => router.navigate('/city')}
@@ -196,7 +212,9 @@ function SensorNote({ sensor }: { sensor: string }) {
       ? 'Counting with your phone'
       : sensor === 'checking'
         ? 'Looking for step sensor…'
-        : 'Step sensor unavailable here';
+        : sensor === 'denied'
+          ? 'Step counting is off in Settings'
+          : 'Step sensor unavailable here';
   return (
     <View className="flex-row items-center flex-1 mr-3">
       <View

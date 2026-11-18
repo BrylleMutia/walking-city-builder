@@ -8,7 +8,7 @@ if (-not $serial) { throw 'No emulator running. Run scripts/e2e/emulator.ps1 fir
 if (-not (Test-Metro)) {
   Write-Host "Starting Metro on port $MetroPort (in its own window)..."
   Start-Process -FilePath 'cmd.exe' `
-    -ArgumentList '/c', "npx expo start --port $MetroPort" `
+    -ArgumentList '/c', "npx expo start --go --port $MetroPort" `
     -WorkingDirectory $ProjectRoot -WindowStyle Minimized | Out-Null
   $deadline = (Get-Date).AddMinutes(2)
   while (-not (Test-Metro)) {

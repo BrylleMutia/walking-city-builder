@@ -17,21 +17,13 @@ import {
   formatNumber,
 } from '../../components/ui/kit';
 import { Tap } from '../../components/ui/Tap';
+import { toast } from '../../components/ui/toast';
 import { RARITY_COLOR, RARITY_LABEL, RARITY_ORDER, RARITY_WEIGHTS, FOIL_CHANCE } from '../../data/rarity';
 import { getListing, type SetListing } from '../../data/sets';
 import type { ItemDef } from '../../data/sets/cozyDowntown';
-import { haptic } from '../../lib/haptics';
+import { buyErrorMessage } from '../../state/messages';
 import { useGameStore } from '../../state/useGameStore';
 import { cardShadow, colors } from '../../theme/tokens';
-
-const BUY_ERRORS: Record<string, string> = {
-  offline: "Can't reach the shop. Check your connection and try again.",
-  signin_disabled: 'The shop is not open yet (sign-in is disabled on the server).',
-  anonymous_disabled: 'The shop is not open yet (sign-in is disabled on the server).',
-  insufficient_steps: 'Not enough Steps yet: keep walking!',
-  set_not_available: 'This set is not available right now.',
-  unknown: 'Something went wrong. Please try again.',
-};
 
 export default function SetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -43,7 +35,6 @@ export default function SetDetailScreen() {
   const buyPack = useGameStore((s) => s.buyPack);
   const cloud = useGameStore((s) => s.cloud);
   const [buying, setBuying] = useState(false);
-  const [buyError, setBuyError] = useState<string | null>(null);
   const [showOdds, setShowOdds] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
@@ -62,15 +53,14 @@ export default function SetDetailScreen() {
   const buy = async () => {
     if (!live || buying) return;
     setBuying(true);
-    setBuyError(null);
     // The server takes the Steps and rolls the cards, so this needs a connection.
     const result = await buyPack(listing.id);
     setBuying(false);
     if (result.ok) {
       router.push('/open-pack');
     } else {
-      haptic.warning();
-      setBuyError(BUY_ERRORS[result.reason] ?? BUY_ERRORS.unknown);
+      // Same id: tapping Buy again updates the toast instead of stacking copies.
+      toast.error("Couldn't buy pack", { id: 'buy-error', description: buyErrorMessage(result.reason) });
     }
   };
   const offline = cloud === 'offline' || cloud === 'signin_disabled';
@@ -150,13 +140,6 @@ export default function SetDetailScreen() {
         )}
       </ScrollView>
 
-      {buyError && (
-        <View className="absolute left-6 right-6 bg-accent-soft rounded-chip px-4 py-3" style={{ bottom: Math.max(insets.bottom, 14) + 84 }}>
-          <AppText weight="semi" tone="accent" className="text-sm text-center">
-            {buyError}
-          </AppText>
-        </View>
-      )}
 
       {/* sticky actions, like "🔖 Book Now" */}
       <View

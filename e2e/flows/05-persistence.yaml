@@ -10,5 +10,5 @@ appId: host.exp.exponent
 - assertVisible: "2,500"
 - tapOn:
     id: tab-city
-- assertVisible: "1 of 144 lots built"
+- assertVisible: "1 of 256 lots built"
 - takeScreenshot: 05-after-restart

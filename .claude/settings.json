@@ -1,5 +1,14 @@
 {
   "enabledPlugins": {
-    "expo@claude-plugins-official": true
+    "expo@claude-plugins-official": true,
+    "skills@swmansion": true
+  },
+  "extraKnownMarketplaces": {
+    "swmansion": {
+      "source": {
+        "source": "github",
+        "repo": "software-mansion-labs/skills"
+      }
+    }
   }
 }

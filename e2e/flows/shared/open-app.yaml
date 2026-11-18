@@ -15,10 +15,11 @@ env:
     maxRetries: 3
     commands:
       - openLink: ${METRO_URL}?__expo_disable_fab=1&__expo_disable_onboarding=1
-      # The app's greeting, or Expo Go's developer menu covering it.
+      # The app's greeting, the first onboarding slide (fresh install), or
+      # Expo Go's developer menu covering either.
       # (Not the project name: Expo Go's home screen lists it too.)
       - extendedWaitUntil:
-          visible: "Welcome back.*|Toggle performance monitor"
+          visible: "Welcome back.*|SKIP|Toggle performance monitor"
           timeout: 60000
 
 # Expo Go opens its developer menu on first launch; close it if it's there.
@@ -27,6 +28,13 @@ env:
       visible: "Toggle performance monitor"
     commands:
       - back
+
+# A fresh install (wiped Expo Go data) starts with onboarding.
+- runFlow:
+    when:
+      visible:
+        id: onboarding-skip
+    file: finish-onboarding.yaml
 - extendedWaitUntil:
     visible:
       id: tab-index

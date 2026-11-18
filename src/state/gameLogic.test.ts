@@ -4,10 +4,15 @@ import {
   STARTING_BALANCE,
   addCards,
   addSteps,
+  applyCityOps,
+  cleanDisplayName,
   available,
+  hasGuestProgress,
   initialData,
+  moveItem,
   pathMask,
   placeItem,
+  raiseStepsToday,
   recentDays,
   removeAt,
   rollDay,
@@ -19,6 +24,20 @@ import {
 
 type TestId = 'bakery' | 'lamp-post' | 'cobblestone-street' | 'pocket-lawn';
 const card = (id: TestId, foil = false) => ({ item: { id }, foil });
+
+describe('hasGuestProgress (sign-in warning)', () => {
+  it('is false for a fresh install, even with the starting balance', () => {
+    expect(hasGuestProgress(initialData('2026-11-16'))).toBe(false);
+  });
+
+  it('is true once the player walked, opened a pack or built something', () => {
+    const s0 = initialData('2026-11-16');
+    expect(hasGuestProgress(addSteps(s0, 1, '2026-11-16'))).toBe(true);
+    expect(hasGuestProgress({ ...s0, packsOpened: 1 })).toBe(true);
+    expect(hasGuestProgress({ ...s0, collection: { bakery: { count: 1, foil: 0 } } })).toBe(true);
+    expect(hasGuestProgress({ ...s0, city: [{ itemId: 'bakery', x: 0, y: 0 }] })).toBe(true);
+  });
+});
 
 describe('steps', () => {
   it('adds steps to today, lifetime and balance', () => {
@@ -82,6 +101,8 @@ describe('collection and city', () => {
     expect(placeItem(a, 'lamp-post', 0, 0)).toBeNull();
     const b = placeItem(a, 'bakery', 1, 0)!;
     expect(placeItem(b, 'bakery', 2, 0)).toBeNull();
+    expect(GRID_SIZE).toBe(16); // must match the server's game_config.grid_size
+    expect(placeItem(owned, 'bakery', 15, 15)).not.toBeNull();
     expect(placeItem(owned, 'bakery', GRID_SIZE, 0)).toBeNull();
     expect(placeItem(owned, 'bakery', -1, 0)).toBeNull();
     expect(placeItem(initialData(), 'bakery', 0, 0)).toBeNull();
@@ -142,5 +163,127 @@ describe('paths', () => {
     expect(g.has('2,1')).toBe(false);
     expect(new Set(g.get('1,0'))).toEqual(new Set(['2,0', '1,1', '0,0']));
     expect(g.get('1,2')).toEqual(['1,1']);
+  });
+});
+
+describe('moveItem (top-down editing)', () => {
+  const owned = addCards(initialData(), [card('bakery'), card('lamp-post')]);
+  const built = applyCityOps(owned, [
+    { op: 'place', itemId: 'bakery', x: 1, y: 1 },
+    { op: 'place', itemId: 'lamp-post', x: 2, y: 2 },
+  ]);
+
+  it('moves an object to a free lot', () => {
+    const s = moveItem(built, 1, 1, 6, 4)!;
+    expect(s.city).toEqual([
+      { itemId: 'bakery', x: 6, y: 4 },
+      { itemId: 'lamp-post', x: 2, y: 2 },
+    ]);
+    // Moving never changes what is owned or placed.
+    expect(available(s, 'bakery')).toBe(available(built, 'bakery'));
+  });
+
+  it('swaps two objects when the target lot is taken', () => {
+    const s = moveItem(built, 1, 1, 2, 2)!;
+    expect(s.city).toEqual([
+      { itemId: 'bakery', x: 2, y: 2 },
+      { itemId: 'lamp-post', x: 1, y: 1 },
+    ]);
+  });
+
+  it('refuses the same lot, an empty source and off-lawn targets', () => {
+    expect(moveItem(built, 1, 1, 1, 1)).toBeNull();
+    expect(moveItem(built, 9, 9, 3, 3)).toBeNull();
+    expect(moveItem(built, 1, 1, GRID_SIZE, 0)).toBeNull();
+    expect(moveItem(built, 1, 1, -1, 0)).toBeNull();
+    expect(moveItem(built, 1, 1, 0.5, 0)).toBeNull();
+  });
+
+  it('replays queued moves, skipping ones that no longer fit', () => {
+    const s = applyCityOps(built, [
+      { op: 'move', fx: 1, fy: 1, tx: 2, ty: 2 }, // swap
+      { op: 'move', fx: 7, fy: 7, tx: 0, ty: 0 }, // nothing there any more: skipped
+      { op: 'move', fx: 2, fy: 2, tx: 3, ty: 3 },
+    ]);
+    expect(s.city).toEqual([
+      { itemId: 'bakery', x: 3, y: 3 },
+      { itemId: 'lamp-post', x: 1, y: 1 },
+    ]);
+  });
+});
+
+describe('applyCityOps', () => {
+  const owned = addCards(initialData(), [card('bakery'), card('lamp-post')]);
+
+  it('replays queued changes in order', () => {
+    const s = applyCityOps(owned, [
+      { op: 'place', itemId: 'bakery', x: 1, y: 1 },
+      { op: 'place', itemId: 'lamp-post', x: 2, y: 1 },
+      { op: 'remove', x: 1, y: 1 },
+      { op: 'place', itemId: 'bakery', x: 5, y: 5 },
+    ]);
+    expect(s.city).toEqual([
+      { itemId: 'lamp-post', x: 2, y: 1 },
+      { itemId: 'bakery', x: 5, y: 5 },
+    ]);
+  });
+
+  it('skips changes that no longer fit the state', () => {
+    const base = placeItem(owned, 'bakery', 0, 0)!; // e.g. already on the server
+    const s = applyCityOps(base, [
+      { op: 'place', itemId: 'lamp-post', x: 0, y: 0 }, // tile taken
+      { op: 'place', itemId: 'bakery', x: 3, y: 3 }, // no bakery left
+      { op: 'remove', x: 9, y: 9 }, // nothing there
+      { op: 'place', itemId: 'lamp-post', x: 4, y: 4 },
+    ]);
+    expect(s.city).toEqual([
+      { itemId: 'bakery', x: 0, y: 0 },
+      { itemId: 'lamp-post', x: 4, y: 4 },
+    ]);
+  });
+});
+
+describe('raiseStepsToday (phone-reported daily total)', () => {
+  const start = () => initialData('2026-11-17');
+
+  it('credits the difference up to the reported total', () => {
+    const s = raiseStepsToday(addSteps(start(), 500, '2026-11-17'), 6200, '2026-11-17');
+    expect(s.stepsToday).toBe(6200);
+    expect(s.lifetimeSteps).toBe(6200);
+    expect(s.balance).toBe(STARTING_BALANCE + 6200);
+  });
+
+  it('never lowers the counter and never double-counts', () => {
+    const walked = raiseStepsToday(start(), 3000, '2026-11-17');
+    expect(raiseStepsToday(walked, 3000, '2026-11-17')).toBe(walked);
+    // Simulated steps can put us above the sensor's total.
+    expect(raiseStepsToday(walked, 1200, '2026-11-17')).toBe(walked);
+    expect(raiseStepsToday(walked, NaN, '2026-11-17')).toBe(walked);
+  });
+
+  it('starts from zero on a new day', () => {
+    const yesterday = raiseStepsToday(start(), 4000, '2026-11-17');
+    const today = raiseStepsToday(yesterday, 250, '2026-11-18');
+    expect(today.stepsToday).toBe(250);
+    expect(today.history['2026-11-17']).toBe(4000);
+    expect(today.lifetimeSteps).toBe(4250);
+  });
+});
+
+describe('cleanDisplayName', () => {
+  it('trims and collapses whitespace', () => {
+    expect(cleanDisplayName('  Bry   Mutia ')).toBe('Bry Mutia');
+  });
+
+  it('rejects empty, whitespace-only and too-long names', () => {
+    expect(cleanDisplayName('')).toBeNull();
+    expect(cleanDisplayName('   ')).toBeNull();
+    expect(cleanDisplayName('x'.repeat(21))).toBeNull();
+    expect(cleanDisplayName('x'.repeat(20))).toBe('x'.repeat(20));
+  });
+
+  it('strips control characters and counts emoji as one character', () => {
+    expect(cleanDisplayName('Ann\u0000a\n')).toBe('Anna');
+    expect(cleanDisplayName('🦫'.repeat(20))).toBe('🦫'.repeat(20));
   });
 });

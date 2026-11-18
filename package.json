@@ -1,5 +1,5 @@
 {
-  "name": "walking-pack-city-builder",
+  "name": "stridewood",
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
@@ -9,7 +9,9 @@
     "@shopify/react-native-skia": "2.14.0",
     "@supabase/supabase-js": "^2.119.0",
     "expo": "~58.0.25",
+    "expo-build-properties": "~58.0.12",
     "expo-constants": "~58.0.16",
+    "expo-dev-client": "~58.0.21",
     "expo-font": "~58.0.12",
     "expo-haptics": "~58.0.8",
     "expo-linking": "~58.0.17",
@@ -22,6 +24,7 @@
     "react-dom": "19.3.0",
     "react-native": "0.88.1",
     "react-native-gesture-handler": "~3.3.0",
+    "react-native-health-connect": "^4.1.3",
     "react-native-reanimated": "4.7.1",
     "react-native-safe-area-context": "~5.11.1",
     "react-native-screens": "~4.30.1",
@@ -41,8 +44,8 @@
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "test": "jest",
     "typecheck": "tsc --noEmit",

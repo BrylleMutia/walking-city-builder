@@ -35,8 +35,10 @@ The flows run in the order set in `config.yaml` and build on each other's state.
 | `03-buy-and-open` | Buy a pack, tear it open, reseal it, tear it again, take the cards out, flick through all 5, summary |
 | `04-city-place` | Place a building, select it, return it to the inventory, place it again, zoom |
 | `05-persistence` | Kill and relaunch: steps, balance and city survive |
+| `06-components` | UI gallery (Profile → Testing): counter, toast stack, bell, delete, password |
+| `07-onboarding` | Replay onboarding (Profile → Testing): swipe 3 slides → Get Started → name "Bry" (Home greets Bry) → count steps (unavailable on the emulator → test walk) → pick 10k → Skip for now → goal is 10,000 → rename back to Walker from Profile |
 
-`shared/` holds sub-flows for opening the app and resetting it.
+`shared/` holds sub-flows for opening the app, finishing onboarding and resetting it. `open-app` runs `finish-onboarding` by itself when a fresh install (wiped Expo Go data) starts on the intro slides.
 
 ## Writing flows
 

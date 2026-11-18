@@ -1,0 +1,131 @@
+# First-run onboarding, replayed from Profile -> Testing: intro slides, name,
+# step counting (unavailable on the emulator, so a test walk), goal, and the
+# save-progress step (Apple/Google still "Soon").
+appId: host.exp.exponent
+---
+- runFlow: shared/open-app.yaml
+- tapOn:
+    id: tab-profile
+- scrollUntilVisible:
+    element:
+      id: replay-onboarding
+- tapOn:
+    id: replay-onboarding
+    retryTapIfNoChange: false
+
+# Intro slides: swipe through all three.
+- extendedWaitUntil:
+    visible: "Walk"
+    timeout: 10000
+- assertVisible:
+    id: onboarding-skip
+- takeScreenshot: 07-slide-walk
+- swipe:
+    start: 85%, 45%
+    end: 15%, 45%
+    duration: 300
+- assertVisible: "Collect"
+- waitForAnimationToEnd
+- takeScreenshot: 07-slide-collect
+- swipe:
+    start: 85%, 45%
+    end: 15%, 45%
+    duration: 300
+- assertVisible: "Build"
+- waitForAnimationToEnd
+- takeScreenshot: 07-slide-build
+- tapOn:
+    id: onboarding-start
+
+# Name: type it, see the live greeting preview.
+- assertVisible: "What should we call you?"
+- tapOn:
+    id: name-input
+- eraseText: 30
+- inputText: "Bry"
+# The docked keyboard covers the preview: close it before checking.
+- hideKeyboard
+- assertVisible:
+    id: name-preview
+    text: "Bry"
+- tapOn:
+    id: avatar-curly
+- waitForAnimationToEnd
+- takeScreenshot: 07-name
+- tapOn:
+    id: name-continue
+- assertVisible: "Hi Bry!.*"
+
+# Steps: before and after allowing step counting.
+- assertVisible: "Count my steps"
+- takeScreenshot: 07-steps-ask
+- tapOn:
+    id: steps-allow
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible:
+      id: steps-test-walk
+    timeout: 10000
+- tapOn:
+    id: steps-test-walk
+    retryTapIfNoChange: false
+- waitForAnimationToEnd
+- takeScreenshot: 07-steps-today
+- tapOn:
+    id: steps-continue
+
+# Goal: pick 10k.
+- assertVisible: "Set my daily goal"
+- tapOn:
+    id: goal-preset-10000
+    retryTapIfNoChange: false
+- waitForAnimationToEnd
+- takeScreenshot: 07-goal
+- tapOn:
+    id: goal-continue
+
+# Save progress: Apple/Google are "Soon"; skip it.
+- assertVisible: "Keep your city safe"
+- assertVisible: "Continue with Google, coming soon"
+- takeScreenshot: 07-save-progress
+- tapOn:
+    id: save-skip
+    retryTapIfNoChange: false
+
+# Back in the game with the new goal.
+- extendedWaitUntil:
+    visible: "Welcome back.*"
+    timeout: 10000
+- assertVisible:
+    id: home-name
+    text: "Bry"
+# Home fades in; a tab tap during the fade can be lost.
+- waitForAnimationToEnd
+- tapOn:
+    id: tab-profile
+- assertVisible: "Profile"
+- scrollUntilVisible:
+    element: "Daily goal"
+- assertVisible: "10,000"
+- takeScreenshot: 07-profile-goal
+
+# Rename from Profile, back to the e2e defaults (name and original portrait).
+- scrollUntilVisible:
+    element:
+      id: edit-name
+    direction: UP
+- tapOn:
+    id: edit-name
+- assertVisible: "Your name & look"
+- tapOn:
+    id: name-input
+- eraseText: 30
+- inputText: "Walker"
+- hideKeyboard
+- tapOn:
+    id: avatar-sprout
+- tapOn:
+    id: name-continue
+- assertVisible:
+    id: profile-name
+    text: "Walker"

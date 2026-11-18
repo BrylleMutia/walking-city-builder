@@ -5,9 +5,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '../components/ui/AppText';
 import { IconButton, PillButton, StepsPill, formatNumber } from '../components/ui/kit';
+import { toast } from '../components/ui/toast';
 import { getListing } from '../data/sets';
-import { haptic } from '../lib/haptics';
 import { PackSession } from '../screens/PackSession';
+import { buyErrorMessage } from '../state/messages';
 import { useGameStore } from '../state/useGameStore';
 
 /**
@@ -72,7 +73,12 @@ export default function OpenPackScreen() {
             canAfford
               ? async () => {
                   const result = await buyPack(listing.id);
-                  if (!result.ok) haptic.warning();
+                  if (!result.ok) {
+                    toast.error("Couldn't open another", {
+                      id: 'buy-error',
+                      description: buyErrorMessage(result.reason),
+                    });
+                  }
                 }
               : undefined
           }
