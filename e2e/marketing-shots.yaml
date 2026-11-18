@@ -1,0 +1,87 @@
+# Marketing screenshots of every player-facing screen, in the order a player
+# meets them. Not part of the test suite (it lives outside flows/).
+#
+#   npm run e2e -- -Flow ..\marketing-shots.yaml
+#
+# Shots land in e2e-artifacts/<run>/; copy the ones you want into marketing/.
+# Buying a pack spends 1,000 Steps, so the account needs at least that much.
+appId: host.exp.exponent
+---
+- runFlow: flows/shared/open-app.yaml
+
+- tapOn:
+    id: tab-index
+- waitForAnimationToEnd
+- takeScreenshot: 01-home
+
+- tapOn:
+    id: tab-shop
+- waitForAnimationToEnd
+- takeScreenshot: 02-shop
+
+- tapOn:
+    id: set-card-cozy-downtown
+- assertVisible: "About this set"
+- waitForAnimationToEnd
+- takeScreenshot: 03-set-detail
+
+# Pack opening (gesture coordinates as in flows/03-buy-and-open.yaml).
+- tapOn:
+    id: buy-pack
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: ".*across the top edge.*"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: 04-pack-sealed
+- swipe:
+    start: 20%, 29%
+    end: 82%, 29%
+    duration: 900
+- extendedWaitUntil:
+    visible: ".*Tap the pack.*"
+    timeout: 5000
+- waitForAnimationToEnd
+- takeScreenshot: 05-pack-torn
+- tapOn:
+    id: booster-pack
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: "Card 1 of 5.*"
+    timeout: 5000
+- waitForAnimationToEnd
+- takeScreenshot: 06-card-reveal
+- repeat:
+    times: 4
+    commands:
+      - tapOn:
+          point: 50%, 50%
+          retryTapIfNoChange: false
+      - waitForAnimationToEnd
+# The last card is the rarest of the pack.
+- takeScreenshot: 07-best-card
+- tapOn:
+    point: 50%, 50%
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible:
+      id: pack-done
+    timeout: 5000
+- waitForAnimationToEnd
+- takeScreenshot: 08-pack-summary
+- tapOn:
+    id: pack-done
+    retryTapIfNoChange: false
+
+- assertVisible: "My City"
+- waitForAnimationToEnd
+- takeScreenshot: 09-city
+
+- tapOn:
+    id: tab-profile
+- scrollUntilVisible:
+    element: "Steps history"
+    direction: UP
+- waitForAnimationToEnd
+# The first screen of Profile already includes the collection grid.
+- takeScreenshot: 10-profile

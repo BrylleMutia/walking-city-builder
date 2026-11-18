@@ -9,3 +9,6 @@ executionOrder:
     - 03-buy-and-open
     - 04-city-place
     - 05-persistence
+    - 08-city-top-view
+    - 06-components
+    - 07-onboarding

@@ -1,0 +1,38 @@
+appId: host.exp.exponent
+---
+# Top-down editing view: move the object flow 04 built (lot 7,7) with the Move
+# button, then back to 3D. Press-and-hold drag isn't reliable in Maestro; it is
+# checked by hand (see e2e/README.md).
+# Points are screen percentages of the top view on the Pixel_10_Pro emulator:
+# lot (7,7) centre ≈ 47%, 47%; three lots to the right ≈ 63%, 47%.
+- tapOn:
+    id: tab-city
+- assertVisible: "1 of 256 lots built"
+- tapOn:
+    id: city-view-toggle
+- waitForAnimationToEnd
+- assertVisible: "Hold and drag to move · drop on a building to swap"
+- takeScreenshot: 08-top-view
+
+- tapOn:
+    point: 47%, 47%
+    retryTapIfNoChange: false
+- tapOn:
+    id: move-building
+    retryTapIfNoChange: false
+- assertVisible: "Tap a lot to move it here, or a building to swap"
+- tapOn:
+    point: 63%, 47%
+    retryTapIfNoChange: false
+- waitForAnimationToEnd
+- assertVisible:
+    id: move-building
+- assertVisible: "1 of 256 lots built"
+- takeScreenshot: 08-moved
+
+# Back to the 3D view.
+- tapOn:
+    id: city-view-toggle
+- waitForAnimationToEnd
+- assertNotVisible: "Hold and drag to move · drop on a building to swap"
+- takeScreenshot: 08-iso-again

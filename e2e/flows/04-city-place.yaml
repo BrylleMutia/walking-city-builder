@@ -2,7 +2,7 @@ appId: host.exp.exponent
 ---
 - tapOn:
     id: tab-city
-- assertVisible: "0 of 144 lots built"
+- assertVisible: "0 of 256 lots built"
 - takeScreenshot: 04-city-inventory
 
 # Pick the first building in the inventory (pack contents are random).
@@ -16,7 +16,7 @@ appId: host.exp.exponent
 - tapOn:
     id: city-map
     retryTapIfNoChange: false
-- assertVisible: "1 of 144 lots built"
+- assertVisible: "1 of 256 lots built"
 - waitForAnimationToEnd
 - takeScreenshot: 04-city-placed
 
@@ -27,7 +27,7 @@ appId: host.exp.exponent
 - tapOn:
     id: remove-building
     retryTapIfNoChange: false
-- assertVisible: "0 of 144 lots built"
+- assertVisible: "0 of 256 lots built"
 
 # Place it once more so the persistence flow has something to check.
 - tapOn:
@@ -37,7 +37,7 @@ appId: host.exp.exponent
 - tapOn:
     id: city-map
     retryTapIfNoChange: false
-- assertVisible: "1 of 144 lots built"
+- assertVisible: "1 of 256 lots built"
 
 # Zoom controls
 - tapOn:

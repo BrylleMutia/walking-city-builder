@@ -1,0 +1,104 @@
+# UI component gallery (Profile -> Testing -> UI components): counter,
+# toasts, notification bell, delete button and password input.
+appId: host.exp.exponent
+---
+- runFlow: shared/open-app.yaml
+- tapOn:
+    id: tab-profile
+- scrollUntilVisible:
+    element:
+      id: open-components
+- tapOn:
+    id: open-components
+- assertVisible: "Components"
+- assertVisible:
+    id: gallery-counter
+- takeScreenshot: 06-gallery-top
+
+# Counter: +5000 rolls 12,480 to 17,480.
+- tapOn:
+    text: "\\+5000"
+    retryTapIfNoChange: false
+- waitForAnimationToEnd
+- assertVisible: "17,480"
+
+# Toasts: "Stack x3" shows three 15 s toasts (regular 4 s toasts close before
+# Maestro, which waits seconds per tap, can check them). Tap to fan them out,
+# then dismiss them all with their close buttons.
+- tapOn:
+    id: gallery-toast-stack
+    retryTapIfNoChange: false
+    waitToSettleTimeoutMs: 400
+- assertVisible: "Couldn't buy pack"
+- takeScreenshot: 06-toast-stack
+- tapOn:
+    text: "Couldn't buy pack"
+    retryTapIfNoChange: false
+    waitToSettleTimeoutMs: 400
+- assertVisible: "Cozy Bakery placed"
+- assertVisible: "Pack saved to your collection"
+- takeScreenshot: 06-toast-expanded
+- repeat:
+    while:
+      visible:
+        id: toast-close
+    commands:
+      - tapOn:
+          id: toast-close
+          index: 0
+          retryTapIfNoChange: false
+- assertNotVisible:
+    id: toast
+
+# Bell: + twice rolls 3 -> 5.
+- scrollUntilVisible:
+    element:
+      id: gallery-bell
+- tapOn:
+    id: gallery-bell-plus
+    retryTapIfNoChange: false
+- tapOn:
+    id: gallery-bell-plus
+    retryTapIfNoChange: false
+- waitForAnimationToEnd
+- takeScreenshot: 06-bell
+
+# Delete: open the panel, confirm.
+- scrollUntilVisible:
+    element:
+      id: gallery-delete
+- tapOn:
+    id: gallery-delete-bin
+    retryTapIfNoChange: false
+- waitForAnimationToEnd
+- takeScreenshot: 06-delete-open
+- tapOn:
+    id: gallery-delete-confirm
+    retryTapIfNoChange: false
+- assertVisible: "Deleted 1 time"
+- takeScreenshot: 06-delete-done
+
+# Password: type, see the meter, reveal it.
+- scrollUntilVisible:
+    element:
+      id: gallery-password
+- tapOn:
+    id: gallery-password
+- inputText: "WalkingCity7!"
+- hideKeyboard
+- assertVisible: "Strong"
+- tapOn:
+    id: gallery-password-eye
+    retryTapIfNoChange: false
+- assertVisible: "WalkingCity7!"
+- takeScreenshot: 06-password
+
+# The back button scrolls with the page: bring it back into view first.
+- scrollUntilVisible:
+    element:
+      id: gallery-back
+    direction: UP
+- tapOn:
+    id: gallery-back
+- assertVisible:
+    id: open-components
