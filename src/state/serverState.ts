@@ -1,3 +1,4 @@
+import { DEFAULT_AVATAR, isAvatarId } from '../data/avatars';
 import { getItem } from '../data/items';
 import type { Rarity } from '../data/rarity';
 import type { ItemId } from '../data/sets/cozyDowntown';
@@ -9,6 +10,8 @@ export interface ServerState {
   profile: {
     display_name: string;
     step_goal: number;
+    /** Older servers don't send it. */
+    avatar_id?: string;
     balance: number;
     lifetime_steps: number;
     packs_opened: number;
@@ -33,7 +36,17 @@ export interface ServerCard {
  * Ids the app doesn't know yet (e.g. a set added on the server before an app
  * update) are skipped rather than crashing the UI.
  */
-export function applyServerState<T extends GameData>(s: T, server: ServerState, today: string): T {
+export function applyServerState<T extends GameData>(
+  s: T,
+  server: ServerState,
+  today: string,
+  /**
+   * True while today's local steps are still on their way to the server: steps
+   * counted beyond the server's total for today are kept (and their Steps
+   * credited locally), so a refresh mid-walk doesn't make the counter jump back.
+   */
+  keepUnsyncedSteps = false,
+): T {
   const history: Record<string, number> = {};
   for (const [day, steps] of Object.entries(server.steps)) {
     if (day !== today && steps > 0) history[day] = steps;
@@ -49,18 +62,22 @@ export function applyServerState<T extends GameData>(s: T, server: ServerState, 
     .map((t) => ({ itemId: t.item_id as ItemId, x: t.x, y: t.y }));
 
   const p = server.profile;
+  const serverToday = server.steps[today] ?? 0;
+  const unsynced = keepUnsyncedSteps && s.dateKey === today ? Math.max(0, s.stepsToday - serverToday) : 0;
   return {
     ...s,
     dateKey: today,
-    stepsToday: server.steps[today] ?? 0,
+    stepsToday: serverToday + unsynced,
     history,
     collection,
     city,
     ...(p
       ? {
-          balance: p.balance,
+          balance: p.balance + unsynced,
           goal: p.step_goal,
-          lifetimeSteps: p.lifetime_steps,
+          displayName: p.display_name,
+          avatarId: isAvatarId(p.avatar_id) ? p.avatar_id : DEFAULT_AVATAR,
+          lifetimeSteps: p.lifetime_steps + unsynced,
           packsOpened: p.packs_opened,
         }
       : {}),

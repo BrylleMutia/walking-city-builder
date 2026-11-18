@@ -42,6 +42,22 @@ describe('applyServerState', () => {
     expect(s.city).toHaveLength(1);
   });
 
+  it('keeps today’s not-yet-synced steps only when asked', () => {
+    const local = { ...initialData('2026-11-17'), stepsToday: 1000 };
+    const kept = applyServerState(local, server, '2026-11-17', true);
+    expect(kept.stepsToday).toBe(1000);
+    expect(kept.balance).toBe(1234 + 200);
+    expect(kept.lifetimeSteps).toBe(5678 + 200);
+    // Server ahead (another device walked more today): the server wins.
+    const behind = applyServerState({ ...local, stepsToday: 500 }, server, '2026-11-17', true);
+    expect(behind.stepsToday).toBe(800);
+    expect(behind.balance).toBe(1234);
+    // Steps from a previous day are never carried into today.
+    const old = applyServerState({ ...local, dateKey: '2026-11-16' }, server, '2026-11-17', true);
+    expect(old.stepsToday).toBe(800);
+    expect(applyServerState(local, server, '2026-11-17').stepsToday).toBe(800);
+  });
+
   it('keeps local values when the profile is missing', () => {
     const s = applyServerState(initialData('2026-11-17'), { ...server, profile: null }, '2026-11-17');
     expect(s.balance).toBe(initialData().balance);

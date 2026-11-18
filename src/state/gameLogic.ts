@@ -1,4 +1,5 @@
 import { isWalkable, tilesPerCard } from '../data/items';
+import { DEFAULT_AVATAR, type AvatarId } from '../data/avatars';
 import type { ItemId } from '../data/sets/cozyDowntown';
 
 /** Pure game rules. No React, no storage: easy to test and to reason about. */
@@ -24,14 +25,33 @@ export interface GameData {
   /** Spendable currency. Earned 1:1 with steps, reduced by purchases. */
   balance: number;
   goal: number;
+  /** What the app calls the player (greeting, Profile). Stored on the server profile. */
+  displayName: string;
+  /** Chosen portrait (data/avatars.ts). Stored on the server profile. */
+  avatarId: AvatarId;
   collection: Partial<Record<ItemId, Owned>>;
   city: Placed[];
   packsOpened: number;
 }
 
-export const GRID_SIZE = 12;
+/** Must match the server's `game_config.grid_size` (place_item's bounds check). */
+export const GRID_SIZE = 16;
 export const STARTING_BALANCE = 3000;
 export const DEFAULT_GOAL = 8000;
+export const DEFAULT_NAME = 'Walker';
+/** The server allows 32; the greeting and Profile header fit about this many. */
+export const NAME_MAX = 20;
+
+/**
+ * Tidies a name typed by the player: strips control characters, collapses
+ * inner whitespace and trims. Returns null when nothing usable is left or it's
+ * too long (the input caps length, so that only happens with pasted text).
+ */
+export function cleanDisplayName(raw: string): string | null {
+  const name = raw.replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim();
+  if (name.length === 0 || [...name].length > NAME_MAX) return null;
+  return name;
+}
 
 export function dayKey(d: Date = new Date()): string {
   const m = `${d.getMonth() + 1}`.padStart(2, '0');
@@ -47,10 +67,24 @@ export function initialData(today: string = dayKey()): GameData {
     lifetimeSteps: 0,
     balance: STARTING_BALANCE,
     goal: DEFAULT_GOAL,
+    displayName: DEFAULT_NAME,
+    avatarId: DEFAULT_AVATAR,
     collection: {},
     city: [],
     packsOpened: 0,
   };
+}
+
+/**
+ * Whether this phone holds progress a sign-in would replace: anything beyond
+ * a fresh install (packs, cards, buildings or walked steps).
+ */
+export function hasGuestProgress(
+  s: Pick<GameData, 'packsOpened' | 'collection' | 'city' | 'lifetimeSteps' | 'stepsToday'>,
+): boolean {
+  return (
+    s.packsOpened > 0 || s.city.length > 0 || Object.keys(s.collection).length > 0 || s.lifetimeSteps > 0 || s.stepsToday > 0
+  );
 }
 
 /** Moves yesterday's counter into history when the calendar day has changed. */
@@ -71,6 +105,18 @@ export function addSteps<T extends GameData>(s: T, steps: number, today: string)
     lifetimeSteps: rolled.lifetimeSteps + n,
     balance: rolled.balance + n,
   };
+}
+
+/**
+ * Raises today's counter to a total reported by the phone (e.g. "steps since
+ * midnight"), crediting only the difference. It never lowers the counter, so
+ * reading the same total twice, or a total below what we already counted
+ * (simulated steps), changes nothing.
+ */
+export function raiseStepsToday<T extends GameData>(s: T, total: number, today: string): T {
+  const rolled = rollDay(s, today);
+  if (!Number.isFinite(total)) return rolled;
+  return addSteps(rolled, Math.floor(total) - rolled.stepsToday, today);
 }
 
 /** Returns null when the balance is too low; never lets it go negative. */
@@ -96,12 +142,12 @@ export function addCards<T extends GameData>(
   return { ...s, collection, packsOpened: s.packsOpened + 1 };
 }
 
-export function placedCount(s: GameData, itemId: ItemId): number {
+export function placedCount(s: Pick<GameData, 'city'>, itemId: ItemId): number {
   return s.city.filter((p) => p.itemId === itemId).length;
 }
 
 /** Copies of an item that are owned but not standing in the city. */
-export function available(s: GameData, itemId: ItemId): number {
+export function available(s: Pick<GameData, 'collection' | 'city'>, itemId: ItemId): number {
   return (s.collection[itemId]?.count ?? 0) - placedCount(s, itemId);
 }
 
@@ -126,8 +172,59 @@ export function removeAt<T extends GameData>(s: T, x: number, y: number): T | nu
   return { ...s, city: s.city.filter((p) => !(p.x === x && p.y === y)) };
 }
 
+const onGrid = (x: number, y: number) =>
+  Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < GRID_SIZE && y < GRID_SIZE;
+
+/**
+ * Moves the object on (fx, fy) to (tx, ty). If that lot is taken, the two
+ * objects swap places (same rule as the server's move_item). Null when the
+ * source is empty, the target is off the lawn, or both are the same lot.
+ */
+export function moveItem<T extends GameData>(s: T, fx: number, fy: number, tx: number, ty: number): T | null {
+  if (!onGrid(tx, ty) || (fx === tx && fy === ty)) return null;
+  const from = tileAt(s, fx, fy);
+  if (!from) return null;
+  const to = tileAt(s, tx, ty);
+  return {
+    ...s,
+    city: s.city.map((p) => {
+      if (p === from) return { ...p, x: tx, y: ty };
+      if (p === to) return { ...p, x: fx, y: fy };
+      return p;
+    }),
+  };
+}
+
+/** A city change made locally that the server hasn't confirmed yet. */
+export type CityOp =
+  | { op: 'place'; itemId: ItemId; x: number; y: number }
+  | { op: 'remove'; x: number; y: number }
+  | { op: 'move'; fx: number; fy: number; tx: number; ty: number };
+
+/**
+ * Re-applies queued city changes on top of a (server) state, in order. Changes
+ * that no longer fit (tile taken, item not owned) are skipped, so the result is
+ * always a valid city.
+ */
+export function applyCityOps<T extends GameData>(s: T, ops: readonly CityOp[]): T {
+  let out = s;
+  for (const o of ops) {
+    const next =
+      o.op === 'place'
+        ? placeItem(out, o.itemId, o.x, o.y)
+        : o.op === 'remove'
+          ? removeAt(out, o.x, o.y)
+          : moveItem(out, o.fx, o.fy, o.tx, o.ty);
+    if (next) out = next;
+  }
+  return out;
+}
+
+/** The fields the daily step history is derived from. */
+export type DayData = Pick<GameData, 'dateKey' | 'stepsToday' | 'history'>;
+
 /** The last `days` calendar days ending today, oldest first. */
-export function recentDays(s: GameData, today: Date, days = 7): { key: string; steps: number }[] {
+export function recentDays(s: DayData, today: Date, days = 7): { key: string; steps: number }[] {
   const out: { key: string; steps: number }[] = [];
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
@@ -138,7 +235,7 @@ export function recentDays(s: GameData, today: Date, days = 7): { key: string; s
 }
 
 /** Consecutive days, ending today or yesterday, with at least one step. */
-export function streak(s: GameData, today: Date): number {
+export function streak(s: DayData, today: Date): number {
   let n = 0;
   for (let i = 0; i < 366; i++) {
     const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
@@ -150,11 +247,11 @@ export function streak(s: GameData, today: Date): number {
   return n;
 }
 
-export function uniqueOwned(s: GameData): number {
+export function uniqueOwned(s: Pick<GameData, 'collection'>): number {
   return Object.values(s.collection).filter((o) => o && o.count > 0).length;
 }
 
-export function foilsOwned(s: GameData): number {
+export function foilsOwned(s: Pick<GameData, 'collection'>): number {
   return Object.values(s.collection).reduce((a, o) => a + (o?.foil ?? 0), 0);
 }
 
