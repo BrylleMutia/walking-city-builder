@@ -3,6 +3,7 @@ import React from 'react';
 import { View, type ViewProps } from 'react-native';
 
 import { cardShadow, colors } from '../../theme/tokens';
+import { AnimatedCounter } from './AnimatedCounter';
 import { AppText } from './AppText';
 import { Tap } from './Tap';
 
@@ -223,9 +224,8 @@ export function StepsPill({ balance, compact }: { balance: number; compact?: boo
       <View className="w-6 h-6 rounded-full bg-accent-soft items-center justify-center mr-1.5">
         <MaterialCommunityIcons name="shoe-print" size={14} color={colors.accent.DEFAULT} />
       </View>
-      <AppText weight="heavy" className={compact ? 'text-sm' : 'text-base'}>
-        {formatNumber(balance)}
-      </AppText>
+      {/* Rolls on every change, so spending and earning Steps are felt, not just shown. */}
+      <AnimatedCounter value={balance} size={compact ? 14 : 16} testID="steps-balance" />
     </View>
   );
 }
