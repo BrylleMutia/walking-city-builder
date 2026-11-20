@@ -60,7 +60,7 @@ export default function SetDetailScreen() {
       router.push('/open-pack');
     } else {
       // Same id: tapping Buy again updates the toast instead of stacking copies.
-      toast.error("Couldn't buy pack", { id: 'buy-error', description: buyErrorMessage(result.reason) });
+      toast.error('Couldn’t buy pack', { id: 'buy-error', description: buyErrorMessage(result.reason) });
     }
   };
   const offline = cloud === 'offline' || cloud === 'signin_disabled';
@@ -71,9 +71,8 @@ export default function SetDetailScreen() {
         {/* illustrated header */}
         <View className="mx-3 rounded-card overflow-hidden" style={{ marginTop: insets.top + 4, height: heroH }}>
           <SetScene listing={listing} width={width - 24} height={heroH} />
-          <View className="absolute left-4 right-4 flex-row justify-between" style={{ top: 14 }}>
+          <View className="absolute left-4" style={{ top: 14 }}>
             <IconButton icon="chevron-left" onPress={() => router.back()} accessibilityLabel="Back" testID="set-back" />
-            <IconButton icon="bell" accessibilityLabel="Notify me" />
           </View>
         </View>
 
@@ -104,7 +103,7 @@ export default function SetDetailScreen() {
           </AppText>
           <Tap onPress={() => setExpanded((v) => !v)} haptics="tick" style={{ alignSelf: 'flex-start' }}>
             <AppText weight="strong" tone="accent" className="text-sm mt-1">
-              {expanded ? 'Show less' : 'See More'}
+              {expanded ? 'Show less' : 'Show more'}
             </AppText>
           </Tap>
         </View>
@@ -160,7 +159,7 @@ export default function SetDetailScreen() {
                 short > 0
                   ? `Walk ${formatNumber(short)} more steps`
                   : buying
-                    ? 'Opening the shop…'
+                    ? 'Buying…'
                     : offline
                       ? 'Offline · tap to retry'
                       : 'Buy pack'

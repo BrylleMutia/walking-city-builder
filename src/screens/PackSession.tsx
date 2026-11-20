@@ -368,7 +368,7 @@ export const PackSession = memo(function PackSession({
                 testID="open-another"
               />
             )}
-            <PillButton label="Add to my city" icon="check" onPress={onDone} testID="pack-done" />
+            <PillButton label="Go to my city" icon="check" onPress={onDone} testID="pack-done" />
           </View>
         )}
       </View>

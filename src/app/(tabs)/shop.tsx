@@ -25,7 +25,7 @@ export default function ShopScreen() {
             Spend your steps
           </AppText>
           <AppText weight="heavy" className="text-2xl">
-            Pack Shop
+            Pack shop
           </AppText>
         </View>
         <StepsPill balance={balance} />

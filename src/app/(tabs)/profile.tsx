@@ -24,7 +24,7 @@ const CLOUD_LABEL = {
   connecting: 'Connecting…',
   online: 'Connected',
   offline: 'Offline',
-  signin_disabled: 'Sign-in disabled',
+  signin_disabled: 'Unavailable',
 } as const;
 const GRID_COLUMNS = 5;
 const GRID_GAP = 8;
@@ -79,7 +79,7 @@ export default function ProfileScreen() {
         style: 'destructive',
         onPress: async () => {
           if (!(await s.reset())) {
-            toast.error("Couldn't reset", { description: 'Reset needs a connection to the game server.' });
+            toast.error('Couldn’t reset', { description: 'Reset needs a connection to the game server.' });
           }
         },
       },

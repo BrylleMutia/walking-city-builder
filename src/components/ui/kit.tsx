@@ -50,7 +50,10 @@ export function IconButton({
   );
 }
 
-/** The big green call-to-action ("Book Now" in the reference). */
+/**
+ * The big call-to-action ("Book Now" in the reference). One `primary` per
+ * screen; a second action next to it uses `outline` so the two never compete.
+ */
 export function PillButton({
   label,
   onPress,
@@ -64,7 +67,7 @@ export function PillButton({
   label: string;
   onPress?: () => void;
   disabled?: boolean;
-  variant?: 'primary' | 'accent' | 'soft';
+  variant?: 'primary' | 'accent' | 'soft' | 'outline';
   icon?: FeatherName;
   style?: ViewProps['style'];
 }) {
@@ -74,9 +77,12 @@ export function PillButton({
       ? 'bg-accent'
       : variant === 'soft'
         ? 'bg-primary-soft'
-        : 'bg-primary';
-  const tone = disabled ? 'muted' : variant === 'soft' ? 'primary' : 'white';
-  const iconColor = disabled ? colors.muted : variant === 'soft' ? colors.primary.dark : '#FFFFFF';
+        : variant === 'outline'
+          ? 'bg-card border-2 border-primary'
+          : 'bg-primary';
+  const light = variant === 'soft' || variant === 'outline';
+  const tone = disabled ? 'muted' : light ? 'primary' : 'white';
+  const iconColor = disabled ? colors.muted : light ? colors.primary.dark : '#FFFFFF';
   return (
     <Tap
       onPress={onPress}
@@ -88,6 +94,17 @@ export function PillButton({
     >
       {icon && <Feather name={icon} size={18} color={iconColor} style={{ marginRight: 8 }} />}
       <AppText weight="strong" tone={tone} className="text-base">
+        {label}
+      </AppText>
+    </Tap>
+  );
+}
+
+/** A low-emphasis action under a screen's main button ("Skip for now"). Same height as PillButton. */
+export function TextButton({ label, onPress, testID }: { label: string; onPress?: () => void; testID?: string }) {
+  return (
+    <Tap onPress={onPress} haptics="tick" testID={testID} className="h-14 items-center justify-center">
+      <AppText weight="strong" tone="soft" className="text-base">
         {label}
       </AppText>
     </Tap>

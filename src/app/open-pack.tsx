@@ -74,7 +74,7 @@ export default function OpenPackScreen() {
               ? async () => {
                   const result = await buyPack(listing.id);
                   if (!result.ok) {
-                    toast.error("Couldn't open another", {
+                    toast.error('Couldn’t open another', {
                       id: 'buy-error',
                       description: buyErrorMessage(result.reason),
                     });

@@ -39,8 +39,8 @@ export default function OnboardingSteps() {
         testID="onboarding-steps"
         footer={<PillButton label="Count my steps" icon="activity" onPress={s.requestStepTracking} testID="steps-allow" />}
       >
-        <Bullet icon="lock" text="Only your step count, nothing else" />
-        <Bullet icon="battery" text="Uses your phone's own counter: no extra battery" />
+        <Bullet icon="lock" text="We read your step count only" />
+        <Bullet icon="battery" text="Uses the counter already in your phone, so it costs no extra battery" />
       </SetupScreen>
     );
   }
@@ -56,7 +56,7 @@ export default function OnboardingSteps() {
             ? 'No problem. You can turn step counting on later in Settings.'
             : s.sensor === 'checking'
               ? 'Looking for your step sensor…'
-              : "This phone can't share its step data in this version of the app, so take a test walk instead."
+              : 'This phone can’t share its step data in this version of the app, so take a test walk instead.'
       }
       testID="onboarding-steps"
       footer={

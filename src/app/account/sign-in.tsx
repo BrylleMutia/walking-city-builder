@@ -53,7 +53,7 @@ export default function SignIn() {
   const noAccountAction =
     error === 'no_account' && onboarded
       ? {
-          label: 'Save this phone’s city to it',
+          label: 'Save this phone’s city to this email',
           onPress: () => router.replace({ pathname: '/account/email', params: { email: normalizeEmail(email) } }),
           testID: 'sign-in-save-instead',
         }
@@ -105,7 +105,7 @@ export default function SignIn() {
       <View className="flex-row items-center justify-center mt-5">
         <Feather name="lock" size={12} color={colors.muted} />
         <AppText tone="muted" className="text-xs ml-1.5">
-          No password needed: the code is your key.
+          You don’t need a password. Just enter the code we email you.
         </AppText>
       </View>
     </SetupScreen>
@@ -133,7 +133,7 @@ function ReplaceWarning() {
           className="self-start mt-1.5"
         >
           <AppText weight="strong" tone="primary" className="text-sm">
-            Save this city first →
+            Save this city first
           </AppText>
         </Tap>
       </View>

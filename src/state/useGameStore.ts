@@ -225,7 +225,7 @@ export const useGameStore = create<GameStore>()(
         offlineNoticeShown = true;
         toast.info('Offline: city saved on this phone', {
           id: 'city-offline',
-          description: "Your changes will sync when you're back online.",
+          description: 'Your changes will sync when you’re back online.',
         });
       };
 
@@ -255,7 +255,7 @@ export const useGameStore = create<GameStore>()(
             set({ cloud: 'offline' });
             enqueue(op);
           } else {
-            toast.warning("Couldn't save that change", {
+            toast.warning('Couldn’t save that change', {
               id: 'city-rejected',
               description: 'Your city was reloaded from the server.',
             });

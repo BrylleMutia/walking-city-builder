@@ -95,7 +95,7 @@ export default function OnboardingIntro() {
           style={startStyle}
           pointerEvents={onLast ? 'auto' : 'none'}
         >
-          <PillButton label="Get Started" onPress={next} testID="onboarding-start" style={{ minWidth: 200 }} />
+          <PillButton label="Get started" onPress={next} testID="onboarding-start" style={{ minWidth: 200 }} />
         </Animated.View>
       </View>
 

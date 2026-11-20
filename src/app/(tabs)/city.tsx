@@ -134,7 +134,7 @@ export default function CityScreen() {
         </View>
         <View className="flex-1 ml-3">
           <AppText tone="muted" className="text-xs">
-            My City
+            My city
           </AppText>
           <AppText weight="heavy" className="text-xl">
             {cozyDowntown.name}
@@ -252,7 +252,7 @@ export default function CityScreen() {
                           testID="move-building"
                         />
                         <View className="w-2" />
-                        <Chip icon="corner-up-left" label="Return" onPress={removeSelected} testID="remove-building" />
+                        <Chip icon="corner-up-left" label="Put away" onPress={removeSelected} testID="remove-building" />
                       </>
                     ) : (
                       <Chip

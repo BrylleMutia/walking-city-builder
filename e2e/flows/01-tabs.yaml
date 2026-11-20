@@ -3,18 +3,18 @@ appId: host.exp.exponent
 - tapOn:
     id: tab-index
 - assertVisible: "Walker"
-- assertVisible: "Activities"
+- assertVisible: "Your activity"
 - takeScreenshot: 01-home
 
 - tapOn:
     id: tab-city
-- assertVisible: "My City"
+- assertVisible: "My city"
 - assertVisible: "An empty lawn, for now"
 - takeScreenshot: 01-city-empty
 
 - tapOn:
     id: tab-shop
-- assertVisible: "Pack Shop"
+- assertVisible: "Pack shop"
 - assertVisible:
     id: set-card-cozy-downtown
 - takeScreenshot: 01-shop

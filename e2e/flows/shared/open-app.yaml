@@ -19,7 +19,7 @@ env:
       # Expo Go's developer menu covering either.
       # (Not the project name: Expo Go's home screen lists it too.)
       - extendedWaitUntil:
-          visible: "Welcome back.*|SKIP|Toggle performance monitor"
+          visible: "Let.s do this|SKIP|Toggle performance monitor"
           timeout: 60000
 
 # Expo Go opens its developer menu on first launch; close it if it's there.
