@@ -5,6 +5,7 @@ const expoConfig = require('eslint-config-expo/flat');
 module.exports = defineConfig([
   expoConfig,
   {
-    ignores: ['dist/*'],
+    // .claude/ holds agent skills (e.g. Impeccable's minified browser scripts), not app code.
+    ignores: ['dist/*', '.claude/**'],
   },
 ]);
