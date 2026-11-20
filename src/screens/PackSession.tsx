@@ -46,7 +46,8 @@ interface Props {
   onDone: () => void;
   /** Omitted when the player can't afford another pack. */
   onOpenAnother?: () => void;
-  anotherLabel?: string;
+  /** Wood cost of another pack, shown on its button. */
+  anotherPrice?: number;
 }
 
 type Phase = 'sealed' | 'opened' | 'reveal' | 'done';
@@ -116,7 +117,7 @@ export const PackSession = memo(function PackSession({
   topInset = 0,
   onDone,
   onOpenAnother,
-  anotherLabel = 'Open another',
+  anotherPrice,
 }: Props) {
   const { geo, packTop, stack } = useLayout(width, height, cards.length);
   const [phase, setPhase] = useState<Phase>('sealed');
@@ -360,9 +361,11 @@ export const PackSession = memo(function PackSession({
         {phase === 'done' && (
           <View style={styles.actions}>
             {onOpenAnother && (
+              // Secondary on purpose: placing the pulls is the main next step, spending again is optional.
               <PillButton
-                label={anotherLabel}
-                variant="accent"
+                label="Open another"
+                variant="outline"
+                price={anotherPrice}
                 icon="refresh-cw"
                 onPress={onOpenAnother}
                 testID="open-another"

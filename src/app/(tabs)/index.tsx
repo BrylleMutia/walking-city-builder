@@ -13,7 +13,7 @@ import {
   Meta,
   SectionHeader,
   StatTile,
-  StepsPill,
+  WoodPill,
   formatNumber,
 } from '../../components/ui/kit';
 import { ProgressRing } from '../../components/ui/ProgressRing';
@@ -153,13 +153,13 @@ export default function HomeScreen() {
       >
         <ActivityCard
           title="Wallet"
-          meta={`${formatNumber(s.balance)} Steps`}
+          meta={`${formatNumber(s.balance)} Wood`}
           metaIcon="credit-card"
           badge={s.balance >= cheapest ? 'Buy pack' : undefined}
           bg="bg-accent-soft"
           onPress={() => router.navigate('/shop')}
         >
-          <StepsPill balance={s.balance} compact />
+          <WoodPill balance={s.balance} compact />
         </ActivityCard>
 
         <ActivityCard

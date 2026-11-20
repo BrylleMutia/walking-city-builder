@@ -1,7 +1,7 @@
 import { isAvatarId } from '../data/avatars';
 import { getItem } from '../data/items';
 import type { ItemId } from '../data/sets/cozyDowntown';
-import { GRID_SIZE, initialData, type CityOp, type GameData, type Owned, type Placed } from './gameLogic';
+import { EMPTY_HAUL, GRID_SIZE, initialData, type CityOp, type GameData, type Haul, type Owned, type Placed } from './gameLogic';
 
 /**
  * The on-disk cache of the game store (zustand persist) and how old caches are
@@ -12,7 +12,7 @@ import { GRID_SIZE, initialData, type CityOp, type GameData, type Owned, type Pl
  * step for the old version in `migrateCache` (renames, unit changes, …) before
  * the final sanitize pass.
  */
-export const CACHE_VERSION = 3;
+export const CACHE_VERSION = 4;
 
 /** Everything the store writes to disk. */
 export interface CachedData extends GameData {
@@ -24,6 +24,8 @@ export interface CachedData extends GameData {
   onboarded: boolean;
   /** Name or step goal changed locally and the server doesn't have them yet. */
   profilePending: boolean;
+  /** Steps and Wood credited since the "your walk paid off" popup last showed. */
+  haul: Haul;
 }
 
 type Raw = Record<string, unknown>;
@@ -109,6 +111,7 @@ export function sanitizeCache(raw: unknown, today?: string): CachedData {
     onboarded: bool(r.onboarded, false),
     profilePending: bool(r.profilePending, false),
     avatarId: isAvatarId(r.avatarId) ? r.avatarId : d.avatarId,
+    haul: isObj(r.haul) ? { steps: count(r.haul.steps, 0), wood: count(r.haul.wood, 0) } : EMPTY_HAUL,
   };
 }
 
@@ -132,6 +135,7 @@ export function toCache(s: CachedData): CachedData {
     pendingCity: s.pendingCity,
     onboarded: s.onboarded,
     profilePending: s.profilePending,
+    haul: s.haul,
   };
 }
 
@@ -144,7 +148,10 @@ export function toCache(s: CachedData): CachedData {
  * - 1: versioned, same shape.
  * - 2: adds `onboarded`, `displayName`, `profilePending` and `avatarId`.
  * - 3: the lawn grew from 12×12 to 16×16 and towns moved by +CITY_SHIFT on
- *   both axes (server migration `city_grid_16`). Current shape, `CachedData`.
+ *   both axes (server migration `city_grid_16`).
+ * - 4: the currency changed from Steps to Wood (server migration
+ *   `wood_currency`): `balance` is divided by 5, like the server's wallets, and
+ *   `haul` is added. Current shape, `CachedData`.
  */
 export function migrateCache(persisted: unknown, fromVersion: number, today?: string): CachedData {
   let data = persisted;
@@ -155,6 +162,10 @@ export function migrateCache(persisted: unknown, fromVersion: number, today?: st
   // offline before the update (they must replay onto the moved lots).
   if (fromVersion < 3 && isObj(data)) {
     data = { ...data, city: shiftTiles(data.city), pendingCity: shiftTiles(data.pendingCity) };
+  }
+  // Steps → Wood: packs went from 1,000 Steps to 200 Wood, so same buying power.
+  if (fromVersion < 4 && isObj(data) && typeof data.balance === 'number') {
+    data = { ...data, balance: Math.floor(data.balance / 5) };
   }
   // Future shape changes: transform `data` here, oldest version first.
   return sanitizeCache(data, today);

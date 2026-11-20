@@ -47,7 +47,7 @@ export default function ComponentGallery() {
           label="Success"
           onPress={() => toast.success('Cozy Bakery placed', { description: 'Your city grew by one building.' })}
         />
-        <Chip label="Error" onPress={() => toast.error("Couldn't buy pack", { description: 'Not enough Steps.' })} />
+        <Chip label="Error" onPress={() => toast.error('Couldn’t buy pack', { description: 'Not enough Wood.' })} />
         <Chip label="Warning" onPress={() => toast.warning('Offline: changes will sync later')} />
         <Chip label="Info" onPress={() => toast.info('New set coming soon')} />
         <Chip
@@ -69,7 +69,7 @@ export default function ComponentGallery() {
           onPress={() => {
             toast('Pack saved to your collection', { duration: 15000 });
             toast.success('Cozy Bakery placed', { description: 'Your city grew by one building.', duration: 15000 });
-            toast.error("Couldn't buy pack", { description: 'Not enough Steps.', duration: 15000 });
+            toast.error('Couldn’t buy pack', { description: 'Not enough Wood.', duration: 15000 });
           }}
         />
         <Chip

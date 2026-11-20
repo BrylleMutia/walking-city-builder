@@ -4,7 +4,7 @@ import { View, type LayoutChangeEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '../components/ui/AppText';
-import { IconButton, PillButton, StepsPill, formatNumber } from '../components/ui/kit';
+import { IconButton, PillButton, WoodPill } from '../components/ui/kit';
 import { toast } from '../components/ui/toast';
 import { getListing } from '../data/sets';
 import { PackSession } from '../screens/PackSession';
@@ -82,7 +82,7 @@ export default function OpenPackScreen() {
                 }
               : undefined
           }
-          anotherLabel={`Open another · ${formatNumber(listing.price)}`}
+          anotherPrice={listing.price}
         />
       )}
 
@@ -100,7 +100,7 @@ export default function OpenPackScreen() {
             {listing.name}
           </AppText>
         </View>
-        <StepsPill balance={balance} compact />
+        <WoodPill balance={balance} compact />
       </View>
     </View>
   );

@@ -35,7 +35,7 @@ export default function OnboardingSteps() {
       <SetupScreen
         scene="steps"
         title="Count my steps"
-        body={`Hi ${s.name}! Your phone already counts your steps. Let the app read them, and every step you walk turns into Steps to spend.`}
+        body={`Hi ${s.name}! Your phone already counts your steps. Let the app read them, and every step you walk has a chance to turn up Wood.`}
         testID="onboarding-steps"
         footer={<PillButton label="Count my steps" icon="activity" onPress={s.requestStepTracking} testID="steps-allow" />}
       >

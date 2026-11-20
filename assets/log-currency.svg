@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">Log currency</title>
+  <g id="log" transform="rotate(-58 128 128)" stroke-linecap="round" stroke-linejoin="round">
+    <path id="bark" d="M62 78C44 78 31 99 31 128s13 50 31 50h126V78Z" fill="#ac5428" stroke="#562b1c" stroke-width="9"/>
+    <path id="bark-shadow" d="M36 144c5 18 14 29 26 29h123v-24H62c-12 0-20-2-26-5Z" fill="#8b482c"/>
+    <path id="wood-highlight" d="M61 86h122v15H61c-7 0-14 4-20 11 4-15 11-26 20-26Z" fill="#c8753b"/>
+    <path id="wood-grain" d="M56 118c26-5 43 4 64 0m-43 26c22-2 38 3 62-1m3-38 25-1" fill="none" stroke="#562b1c" stroke-width="6"/>
+    <ellipse id="cut-end" cx="188" cy="128" rx="34" ry="50" fill="#ffcf93" stroke="#562b1c" stroke-width="9"/>
+    <ellipse id="growth-ring" cx="189" cy="128" rx="22" ry="36" fill="none" stroke="#bd602b" stroke-width="5"/>
+    <path id="heartwood" d="M190 111c-11 0-11 34 0 34 9 0 9-29 1-29" fill="none" stroke="#bd602b" stroke-width="5"/>
+  </g>
+</svg>

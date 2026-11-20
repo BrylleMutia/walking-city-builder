@@ -1,13 +1,17 @@
 import {
   DIR,
   GRID_SIZE,
-  STARTING_BALANCE,
+  EMPTY_HAUL,
+  HAUL_MIN_STEPS,
+  STARTING_WOOD,
   addCards,
+  addToHaul,
   addSteps,
   applyCityOps,
   cleanDisplayName,
   available,
   hasGuestProgress,
+  haulReady,
   initialData,
   moveItem,
   pathMask,
@@ -17,6 +21,7 @@ import {
   removeAt,
   rollDay,
   spend,
+  stepsForWood,
   streak,
   uniqueOwned,
   walkGraph,
@@ -40,11 +45,12 @@ describe('hasGuestProgress (sign-in warning)', () => {
 });
 
 describe('steps', () => {
-  it('adds steps to today, lifetime and balance', () => {
+  it('adds steps to today and lifetime, but not to the Wood balance', () => {
     const s = addSteps(initialData('2026-11-16'), 500, '2026-11-16');
     expect(s.stepsToday).toBe(500);
     expect(s.lifetimeSteps).toBe(500);
-    expect(s.balance).toBe(STARTING_BALANCE + 500);
+    // Wood is rolled by the server when the steps sync.
+    expect(s.balance).toBe(STARTING_WOOD);
   });
 
   it('ignores negative and fractional input', () => {
@@ -58,7 +64,7 @@ describe('steps', () => {
     s = addSteps(s, 100, '2026-11-16');
     expect(s.history['2026-11-15']).toBe(4000);
     expect(s.stepsToday).toBe(100);
-    expect(s.balance).toBe(STARTING_BALANCE + 4100);
+    expect(s.balance).toBe(STARTING_WOOD);
     expect(rollDay(s, '2026-11-16')).toBe(s);
   });
 
@@ -80,9 +86,34 @@ describe('steps', () => {
 describe('spending', () => {
   it('refuses to overspend', () => {
     const s = initialData();
-    expect(spend(s, STARTING_BALANCE + 1)).toBeNull();
-    expect(spend(s, 1000)?.balance).toBe(STARTING_BALANCE - 1000);
-    expect(spend(s, STARTING_BALANCE)?.balance).toBe(0);
+    expect(spend(s, STARTING_WOOD + 1)).toBeNull();
+    expect(spend(s, 200)?.balance).toBe(STARTING_WOOD - 200);
+    expect(spend(s, STARTING_WOOD)?.balance).toBe(0);
+  });
+
+  it('estimates the steps still needed for some Wood (10% drop chance)', () => {
+    expect(stepsForWood(37)).toBe(370);
+    expect(stepsForWood(0)).toBe(0);
+    expect(stepsForWood(-5)).toBe(0);
+  });
+});
+
+describe('haul (the "your walk paid off" popup)', () => {
+  it('adds up credited steps and Wood across syncs', () => {
+    let h = addToHaul(EMPTY_HAUL, 300, 31);
+    h = addToHaul(h, 250, 22);
+    expect(h).toEqual({ steps: 550, wood: 53 });
+  });
+
+  it('ignores missing, negative and fractional numbers (older servers send no wood)', () => {
+    expect(addToHaul(EMPTY_HAUL, 0, 0)).toBe(EMPTY_HAUL);
+    expect(addToHaul(EMPTY_HAUL, 120.7, undefined as unknown as number)).toEqual({ steps: 120, wood: 0 });
+    expect(addToHaul(EMPTY_HAUL, -10, -3)).toBe(EMPTY_HAUL);
+  });
+
+  it(`is ready from ${HAUL_MIN_STEPS} steps`, () => {
+    expect(haulReady({ steps: HAUL_MIN_STEPS - 1, wood: 99 })).toBe(false);
+    expect(haulReady({ steps: HAUL_MIN_STEPS, wood: 0 })).toBe(true);
   });
 });
 
@@ -250,7 +281,7 @@ describe('raiseStepsToday (phone-reported daily total)', () => {
     const s = raiseStepsToday(addSteps(start(), 500, '2026-11-17'), 6200, '2026-11-17');
     expect(s.stepsToday).toBe(6200);
     expect(s.lifetimeSteps).toBe(6200);
-    expect(s.balance).toBe(STARTING_BALANCE + 6200);
+    expect(s.balance).toBe(STARTING_WOOD);
   });
 
   it('never lowers the counter and never double-counts', () => {

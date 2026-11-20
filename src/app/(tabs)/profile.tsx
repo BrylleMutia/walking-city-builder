@@ -72,7 +72,7 @@ export default function ProfileScreen() {
   const total = cozyDowntown.items.length;
 
   const confirmReset = () =>
-    Alert.alert('Reset all data?', 'This clears your steps, Steps balance, cards and city. It cannot be undone.', [
+    Alert.alert('Reset all data?', 'This clears your steps, Wood, cards and city. It cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Reset',

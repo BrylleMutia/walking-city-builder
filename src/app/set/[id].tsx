@@ -22,6 +22,7 @@ import { RARITY_COLOR, RARITY_LABEL, RARITY_ORDER, RARITY_WEIGHTS, FOIL_CHANCE }
 import { getListing, type SetListing } from '../../data/sets';
 import type { ItemDef } from '../../data/sets/cozyDowntown';
 import { buyErrorMessage } from '../../state/messages';
+import { stepsForWood } from '../../state/gameLogic';
 import { useGameStore } from '../../state/useGameStore';
 import { cardShadow, colors } from '../../theme/tokens';
 
@@ -53,7 +54,7 @@ export default function SetDetailScreen() {
   const buy = async () => {
     if (!live || buying) return;
     setBuying(true);
-    // The server takes the Steps and rolls the cards, so this needs a connection.
+    // The server takes the Wood and rolls the cards, so this needs a connection.
     const result = await buyPack(listing.id);
     setBuying(false);
     if (result.ok) {
@@ -87,7 +88,7 @@ export default function SetDetailScreen() {
             </View>
           </Card>
           <View className="pt-6">
-            <PriceTag label={live ? formatNumber(listing.price) : 'Soon'} sub={live ? 'steps / pack' : undefined} />
+            <PriceTag label={live ? formatNumber(listing.price) : 'Soon'} sub={live ? 'Wood / pack' : undefined} wood />
           </View>
         </View>
 
@@ -98,8 +99,8 @@ export default function SetDetailScreen() {
           <AppText tone="muted" className="text-sm mt-2 leading-6" numberOfLines={expanded ? undefined : 3}>
             {listing.blurb}{' '}
             {live
-              ? 'Each pack holds 5 cards. Every card is a building for your city, and any card has a 10% chance to be a shiny foil.'
-              : 'This set is still being built. Keep walking: your Steps will be waiting.'}
+              ? 'Each pack holds 5 cards. Every card is a street, prop or building for your city, and any card has a 10% chance to be foil.'
+              : 'This set is still being built. Keep walking and save up Wood for it.'}
           </AppText>
           <Tap onPress={() => setExpanded((v) => !v)} haptics="tick" style={{ alignSelf: 'flex-start' }}>
             <AppText weight="strong" tone="accent" className="text-sm mt-1">
@@ -157,7 +158,7 @@ export default function SetDetailScreen() {
             <PillButton
               label={
                 short > 0
-                  ? `Walk ${formatNumber(short)} more steps`
+                  ? `~${formatNumber(stepsForWood(short))} more steps to go`
                   : buying
                     ? 'Buying…'
                     : offline
@@ -165,6 +166,8 @@ export default function SetDetailScreen() {
                       : 'Buy pack'
               }
               icon={short > 0 ? 'lock' : offline ? 'wifi-off' : 'shopping-bag'}
+              // The cost sits on the button only while it actually says "Buy pack".
+              price={short > 0 || buying || offline ? undefined : listing.price}
               disabled={short > 0 || buying}
               onPress={buy}
               testID="buy-pack"

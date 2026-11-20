@@ -5,7 +5,7 @@ const BUY_ERRORS: Partial<Record<BackendReason, string>> = {
   offline: 'Can’t reach the shop. Check your connection and try again.',
   anonymous_disabled: 'The shop is closed right now. Try again later.',
   not_configured: 'The shop is closed right now. Try again later.',
-  insufficient_steps: 'Not enough Steps yet: keep walking!',
+  insufficient_wood: 'Not enough Wood yet: keep walking!',
   set_not_available: 'This set is not available right now.',
 };
 

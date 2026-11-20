@@ -39,9 +39,9 @@ export type Database = {
         ]
       }
       game_config: {
-        Row: { cards_per_pack: number; foil_chance: number; grid_size: number; id: boolean; max_daily_steps: number; starting_balance: number }
-        Insert: { cards_per_pack?: number; foil_chance?: number; grid_size?: number; id?: boolean; max_daily_steps?: number; starting_balance?: number }
-        Update: { cards_per_pack?: number; foil_chance?: number; grid_size?: number; id?: boolean; max_daily_steps?: number; starting_balance?: number }
+        Row: { cards_per_pack: number; foil_chance: number; grid_size: number; id: boolean; max_daily_steps: number; starting_balance: number; wood_drop_chance: number }
+        Insert: { cards_per_pack?: number; foil_chance?: number; grid_size?: number; id?: boolean; max_daily_steps?: number; starting_balance?: number; wood_drop_chance?: number }
+        Update: { cards_per_pack?: number; foil_chance?: number; grid_size?: number; id?: boolean; max_daily_steps?: number; starting_balance?: number; wood_drop_chance?: number }
         Relationships: []
       }
       inventory: {

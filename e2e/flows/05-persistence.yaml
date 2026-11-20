@@ -1,13 +1,32 @@
 appId: host.exp.exponent
 ---
 # Kill Expo Go and reload: steps, wallet and city must come back from storage.
-- runFlow: shared/open-app.yaml
+- runFlow:
+    file: shared/open-app.yaml
+    env:
+      KEEP_HAUL: "true"
+# 02 walked 500 steps since the last popup, so this open shows what they found.
+- extendedWaitUntil:
+    visible:
+      id: wood-haul-close
+    timeout: 15000
+- assertVisible: "Your walk paid off!"
+- assertVisible: ".*walked 500 steps.*"
+- waitForAnimationToEnd
+- takeScreenshot: 05-wood-haul
+- tapOn:
+    id: wood-haul-close
+- assertNotVisible:
+    id: wood-haul-close
 - assertVisible:
     id: steps-today
     text: "500"
 - tapOn:
     id: tab-shop
-- assertVisible: "2,500"
+# 400 + ~50 Wood from 02, minus a 200-Wood pack in 03.
+- assertVisible:
+    id: wood-balance
+    text: "2[0-9][0-9]"
 - tapOn:
     id: tab-city
 - assertVisible: "1 of 256 lots built"

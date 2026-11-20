@@ -51,7 +51,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   serverCity = [];
   mocked.ensureSession.mockResolvedValue('user-1');
-  mocked.syncSteps.mockResolvedValue({ day: '', steps: 0, credited: 0, balance: 3000 });
+  mocked.syncSteps.mockResolvedValue({ day: '', steps: 0, credited: 0, wood: 0, balance: 3000 });
   mocked.placeItem.mockImplementation(async (item_id, x, y) => {
     if (serverCity.some((t) => t.x === x && t.y === y)) {
       throw new (api.BackendError as unknown as new (r: string) => Error)('tile_occupied');
@@ -71,6 +71,9 @@ beforeEach(() => {
     city: [],
     pendingCity: [],
     cloud: 'offline',
+    onboarded: true,
+    haul: { steps: 0, wood: 0 },
+    showHaul: false,
   });
 });
 
@@ -482,5 +485,42 @@ describe('avatar', () => {
     serverAvatar(undefined);
     await useGameStore.getState().connect();
     expect(useGameStore.getState().avatarId).toBe('sprout');
+  });
+});
+
+describe('wood haul popup', () => {
+  const walked = (steps: number, wood: number, balance: number) => {
+    useGameStore.setState({ stepsToday: steps });
+    mocked.syncSteps.mockResolvedValue({ day: '', steps, credited: steps, wood, balance });
+  };
+
+  it('opens on connect once 500+ steps were credited, with what the server rolled', async () => {
+    walked(620, 58, 458);
+    await useGameStore.getState().connect();
+    expect(useGameStore.getState()).toMatchObject({ showHaul: true, haul: { steps: 620, wood: 58 }, balance: 458 });
+  });
+
+  it('keeps adding up below 500 and stays closed', async () => {
+    walked(300, 31, 431);
+    await useGameStore.getState().connect();
+    expect(useGameStore.getState()).toMatchObject({ showHaul: false, haul: { steps: 300, wood: 31 } });
+    walked(560, 25, 456);
+    mocked.syncSteps.mockResolvedValue({ day: '', steps: 560, credited: 260, wood: 25, balance: 456 });
+    await useGameStore.getState().connect();
+    expect(useGameStore.getState()).toMatchObject({ showHaul: true, haul: { steps: 560, wood: 56 } });
+  });
+
+  it('starts a new haul when dismissed', async () => {
+    walked(900, 90, 490);
+    await useGameStore.getState().connect();
+    useGameStore.getState().dismissHaul();
+    expect(useGameStore.getState()).toMatchObject({ showHaul: false, haul: { steps: 0, wood: 0 } });
+  });
+
+  it('waits for the first open after onboarding', async () => {
+    useGameStore.setState({ onboarded: false });
+    walked(900, 90, 490);
+    await useGameStore.getState().connect();
+    expect(useGameStore.getState()).toMatchObject({ showHaul: false, haul: { steps: 900, wood: 90 } });
   });
 });

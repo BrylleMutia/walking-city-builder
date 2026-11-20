@@ -5,7 +5,7 @@ export interface SetListing {
   name: string;
   tagline: string;
   blurb: string;
-  /** Price of one booster pack, in Steps. */
+  /** Price of one booster pack, in Wood. Must match the server's `card_sets.price`. */
   price: number;
   wrapper: CardSet['wrapper'];
   /** Present only for sets that can actually be opened. */
@@ -18,8 +18,8 @@ export const SET_LISTINGS: SetListing[] = [
     name: cozyDowntown.name,
     tagline: cozyDowntown.tagline,
     blurb:
-      'A warm little main street: cafés, bakeries and brick townhouses, with a clock tower and a grand theater for the lucky few.',
-    price: 1000,
+      'A warm little main street of cafés and brick townhouses. The rarest packs hold a clock tower and a grand theater.',
+    price: 200,
     wrapper: cozyDowntown.wrapper,
     set: cozyDowntown,
   },

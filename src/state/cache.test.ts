@@ -15,6 +15,7 @@ describe('sanitizeCache', () => {
         onboarded: false,
         profilePending: false,
         avatarId: 'sprout',
+        haul: { steps: 0, wood: 0 },
       });
     }
   });
@@ -39,6 +40,7 @@ describe('sanitizeCache', () => {
       onboarded: true,
       profilePending: true,
       avatarId: 'curly' as const,
+      haul: { steps: 420, wood: 44 },
     };
     expect(sanitizeCache(good, TODAY)).toEqual(good);
   });
@@ -115,7 +117,7 @@ describe('migrateCache', () => {
   it('upgrades an unversioned (v0) cache, dropping session-only fields', () => {
     const v0 = { ...initialData(TODAY), balance: 4200, cloud: 'online', hydrated: true, hapticsOn: true };
     const out = migrateCache(v0, 0, TODAY);
-    expect(out.balance).toBe(4200);
+    expect(out.balance).toBe(840); // Steps → Wood (v4)
     expect(out).not.toHaveProperty('cloud');
     expect(out).not.toHaveProperty('hydrated');
     expect(CACHE_VERSION).toBeGreaterThan(0);
@@ -155,6 +157,14 @@ describe('migrateCache', () => {
     ]);
     // Already on the new lawn: no second shift.
     expect(migrateCache(out, CACHE_VERSION, TODAY).city).toEqual(out.city);
+  });
+
+  it('turns a Steps balance (v3) into Wood with the same buying power', () => {
+    const v3 = { ...initialData(TODAY), balance: 3999 };
+    expect(migrateCache(v3, 3, TODAY).balance).toBe(799);
+    expect(migrateCache(v3, 3, TODAY).haul).toEqual({ steps: 0, wood: 0 });
+    // Already Wood: no second conversion.
+    expect(migrateCache({ ...v3, balance: 600 }, CACHE_VERSION, TODAY).balance).toBe(600);
   });
 
   it('round-trips through toCache', () => {

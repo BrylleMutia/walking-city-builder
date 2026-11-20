@@ -22,7 +22,10 @@ export interface GameData {
   /** Finished days only; today lives in `stepsToday`. */
   history: Record<string, number>;
   lifetimeSteps: number;
-  /** Spendable currency. Earned 1:1 with steps, reduced by purchases. */
+  /**
+   * Spendable Wood. Only the server changes it: each synced step has a chance
+   * to drop one (`sync_steps`), packs cost some.
+   */
   balance: number;
   goal: number;
   /** What the app calls the player (greeting, Profile). Stored on the server profile. */
@@ -36,7 +39,10 @@ export interface GameData {
 
 /** Must match the server's `game_config.grid_size` (place_item's bounds check). */
 export const GRID_SIZE = 16;
-export const STARTING_BALANCE = 3000;
+/** Must match the server's `game_config.starting_balance` (two Cozy Downtown packs). */
+export const STARTING_WOOD = 400;
+/** Must match the server's `game_config.wood_drop_chance`; used only for "about N steps to go" hints. */
+export const WOOD_DROP_CHANCE = 0.1;
 export const DEFAULT_GOAL = 8000;
 export const DEFAULT_NAME = 'Walker';
 /** The server allows 32; the greeting and Profile header fit about this many. */
@@ -65,7 +71,7 @@ export function initialData(today: string = dayKey()): GameData {
     stepsToday: 0,
     history: {},
     lifetimeSteps: 0,
-    balance: STARTING_BALANCE,
+    balance: STARTING_WOOD,
     goal: DEFAULT_GOAL,
     displayName: DEFAULT_NAME,
     avatarId: DEFAULT_AVATAR,
@@ -103,7 +109,6 @@ export function addSteps<T extends GameData>(s: T, steps: number, today: string)
     ...rolled,
     stepsToday: rolled.stepsToday + n,
     lifetimeSteps: rolled.lifetimeSteps + n,
-    balance: rolled.balance + n,
   };
 }
 
@@ -118,6 +123,31 @@ export function raiseStepsToday<T extends GameData>(s: T, total: number, today: 
   if (!Number.isFinite(total)) return rolled;
   return addSteps(rolled, Math.floor(total) - rolled.stepsToday, today);
 }
+
+/**
+ * Steps and Wood credited by the server since the "your walk paid off" popup
+ * last showed. It adds up across opens until it reaches HAUL_MIN_STEPS.
+ */
+export interface Haul {
+  steps: number;
+  wood: number;
+}
+
+export const EMPTY_HAUL: Haul = { steps: 0, wood: 0 };
+/** The popup shows on an app open once at least this many steps were credited. */
+export const HAUL_MIN_STEPS = 500;
+
+export function addToHaul(h: Haul, credited: number, wood: number): Haul {
+  const c = Number.isFinite(credited) ? Math.max(0, Math.floor(credited)) : 0;
+  const w = Number.isFinite(wood) ? Math.max(0, Math.floor(wood)) : 0;
+  if (c === 0 && w === 0) return h;
+  return { steps: h.steps + c, wood: h.wood + w };
+}
+
+export const haulReady = (h: Haul) => h.steps >= HAUL_MIN_STEPS;
+
+/** Rough steps still to walk for `wood` more Wood, for "~N steps to go" hints. */
+export const stepsForWood = (wood: number) => Math.ceil(Math.max(0, wood) / WOOD_DROP_CHANCE);
 
 /** Returns null when the balance is too low; never lets it go negative. */
 export function spend<T extends GameData>(s: T, cost: number): T | null {
