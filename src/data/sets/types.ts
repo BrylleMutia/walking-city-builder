@@ -1,9 +1,10 @@
 import type { Rarity } from '../rarity';
 import type { CozyDowntownId } from './cozyDowntown';
 import type { NeonHarborId } from './neonHarbor';
+import type { BlossomGardensId } from './blossomGardens';
 
 /** Every item id of every playable set. Item ids are unique across sets (the server keys items by id). */
-export type ItemId = CozyDowntownId | NeonHarborId;
+export type ItemId = CozyDowntownId | NeonHarborId | BlossomGardensId;
 
 /**
  * - path: ground infrastructure (streets, sidewalks, lawns). Walkable, auto-connects

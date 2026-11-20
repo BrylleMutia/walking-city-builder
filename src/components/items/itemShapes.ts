@@ -1,5 +1,6 @@
 import { sizeOf } from '../../data/items';
 import type { ItemId } from '../../data/sets/types';
+import { BLOSSOM_BUILDERS } from './blossomGardensShapes';
 import { NEON_BUILDERS } from './neonHarborShapes';
 import { DEFAULT_MASK, PATH_HEIGHT, getPathShapes, isPathId, type PathId } from './pathShapes';
 import {
@@ -420,6 +421,8 @@ const BUILDERS: Record<
   'grand-theater': { build: grandTheater, height: 6.1 },
   // Series 2
   ...NEON_BUILDERS,
+  // Series 3
+  ...BLOSSOM_BUILDERS,
 };
 
 const isPieces = (v: Shape[] | ArtPiece[]): v is ArtPiece[] => v.length > 0 && 'rect' in v[0];

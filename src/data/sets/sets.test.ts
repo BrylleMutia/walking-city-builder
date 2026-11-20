@@ -3,9 +3,9 @@ import { getItem, setOf } from '../items';
 import { PLAYABLE_SETS, SET_LISTINGS, setCountLabel, setSummary } from '.';
 
 describe('playable sets', () => {
-  it('Cozy Downtown and Neon Harbor can be opened; Blossom Gardens is still coming', () => {
-    expect(PLAYABLE_SETS.map((s) => s.id)).toEqual(['cozy-downtown', 'neon-harbor']);
-    expect(SET_LISTINGS.find((l) => l.id === 'blossom-gardens')?.set).toBeUndefined();
+  it('all three sets can be opened, in Shop order', () => {
+    expect(PLAYABLE_SETS.map((s) => s.id)).toEqual(['cozy-downtown', 'neon-harbor', 'blossom-gardens']);
+    expect(SET_LISTINGS.every((l) => l.set)).toBe(true);
   });
 
   it('every set has at least one item of every rarity (the server rolls rarity first)', () => {
@@ -19,6 +19,8 @@ describe('playable sets', () => {
     expect(new Set(ids).size).toBe(ids.length);
     expect(setOf('ferris-wheel')?.id).toBe('neon-harbor');
     expect(getItem('boardwalk-planks')?.walkable).toBe(true);
+    expect(setOf('great-cherry-tree')?.id).toBe('blossom-gardens');
+    expect(getItem('stepping-stones')?.tilesPerCard).toBe(4);
   });
 
   it('follows the set guideline: commons are mostly walkable paths, uncommon and up are buildings', () => {
@@ -36,8 +38,8 @@ describe('playable sets', () => {
   });
 
   it('counts sets that are out vs coming soon', () => {
-    expect(setCountLabel()).toBe('2 out · 1 soon');
-    expect(setCountLabel(SET_LISTINGS.filter((l) => l.set))).toBe('2 sets');
+    expect(setCountLabel()).toBe('3 sets');
+    expect(setCountLabel([...SET_LISTINGS, { ...SET_LISTINGS[0], id: 'next', set: undefined }])).toBe('3 out · 1 soon');
   });
 
   it('matches the Wood prices on the server', () => {

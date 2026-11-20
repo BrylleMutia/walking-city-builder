@@ -1,5 +1,6 @@
 import { cozyDowntown } from './cozyDowntown';
 import { neonHarbor } from './neonHarbor';
+import { blossomGardens } from './blossomGardens';
 import { RARITY_WEIGHTS } from '../rarity';
 import type { CardSet, ItemKind } from './types';
 
@@ -37,19 +38,14 @@ export const SET_LISTINGS: SetListing[] = [
     set: neonHarbor,
   },
   {
-    id: 'blossom-gardens',
-    name: 'Blossom Gardens',
-    tagline: 'Series 3 · Old Town',
-    blurb: 'Koi ponds and cherry trees for a quieter corner of the city.',
+    id: blossomGardens.id,
+    name: blossomGardens.name,
+    tagline: blossomGardens.tagline,
+    blurb:
+      'Koi ponds, stepping stones and a moon bridge for a quieter corner of the city. The rarest packs hold a pagoda and a great cherry tree.',
     price: 300,
-    wrapper: {
-      gradient: ['#FFD9E4', '#F9A8C0', '#7FC8A9'],
-      skyline: '#3F7F68',
-      skylineFar: '#69A88F',
-      window: '#FFF3C4',
-      ink: '#5A2A3C',
-      sun: '#FFFFFF',
-    },
+    wrapper: blossomGardens.wrapper,
+    set: blossomGardens,
   },
 ];
 
