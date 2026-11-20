@@ -161,12 +161,12 @@ describe('moving objects', () => {
 
   beforeEach(() => {
     serverCity = [
-      { x: 1, y: 1, item_id: 'bakery' },
+      { x: 1, y: 1, item_id: 'flower-kiosk' },
       { x: 2, y: 2, item_id: 'lamp-post' },
     ];
     useGameStore.setState({
       city: [
-        { itemId: 'bakery', x: 1, y: 1 },
+        { itemId: 'flower-kiosk', x: 1, y: 1 },
         { itemId: 'lamp-post', x: 2, y: 2 },
       ],
     });
@@ -177,7 +177,7 @@ describe('moving objects', () => {
     useGameStore.setState({ cloud: 'online' });
     expect(useGameStore.getState().moveItem(1, 1, 2, 2)).toBe(true);
     expect(useGameStore.getState().city).toEqual([
-      { itemId: 'bakery', x: 2, y: 2 },
+      { itemId: 'flower-kiosk', x: 2, y: 2 },
       { itemId: 'lamp-post', x: 1, y: 1 },
     ]);
     await flush();
@@ -195,7 +195,7 @@ describe('moving objects', () => {
     expect(mocked.moveItem).toHaveBeenCalledWith(1, 1, 5, 5);
     expect(useGameStore.getState().pendingCity).toEqual([]);
     expect(useGameStore.getState().city).toEqual(
-      expect.arrayContaining([{ itemId: 'bakery', x: 5, y: 5 }]),
+      expect.arrayContaining([{ itemId: 'flower-kiosk', x: 5, y: 5 }]),
     );
     useGameStore.getState().pauseLive();
   });

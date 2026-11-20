@@ -6,6 +6,9 @@ import {
   STARTING_WOOD,
   addCards,
   addToHaul,
+  fitCity,
+  fits,
+  objectAt,
   addSteps,
   applyCityOps,
   cleanDisplayName,
@@ -27,7 +30,16 @@ import {
   walkGraph,
 } from './gameLogic';
 
-type TestId = 'bakery' | 'lamp-post' | 'cobblestone-street' | 'pocket-lawn';
+type TestId =
+  | 'bakery'
+  | 'lamp-post'
+  | 'cobblestone-street'
+  | 'pocket-lawn'
+  | 'flower-kiosk'
+  | 'grand-theater'
+  | 'corner-cafe'
+  | 'bookshop'
+  | 'neon-diner';
 const card = (id: TestId, foil = false) => ({ item: { id }, foil });
 
 describe('hasGuestProgress (sign-in warning)', () => {
@@ -126,14 +138,18 @@ describe('collection and city', () => {
     expect(owned.packsOpened).toBe(1);
   });
 
-  it('places only what is owned, on free tiles inside the grid', () => {
+  it('places only what is owned, on free lots inside the grid', () => {
+    // The bakery is 2×1: it covers (0,0) and (1,0).
     const a = placeItem(owned, 'bakery', 0, 0)!;
     expect(available(a, 'bakery')).toBe(1);
     expect(placeItem(a, 'lamp-post', 0, 0)).toBeNull();
-    const b = placeItem(a, 'bakery', 1, 0)!;
-    expect(placeItem(b, 'bakery', 2, 0)).toBeNull();
+    expect(placeItem(a, 'lamp-post', 1, 0)).toBeNull();
+    expect(placeItem(a, 'bakery', 1, 0)).toBeNull();
+    const b = placeItem(a, 'bakery', 2, 0)!;
+    expect(placeItem(b, 'bakery', 4, 0)).toBeNull(); // none left
     expect(GRID_SIZE).toBe(16); // must match the server's game_config.grid_size
-    expect(placeItem(owned, 'bakery', 15, 15)).not.toBeNull();
+    expect(placeItem(owned, 'bakery', 14, 15)).not.toBeNull();
+    expect(placeItem(owned, 'bakery', 15, 15)).toBeNull(); // its right half would be off the lawn
     expect(placeItem(owned, 'bakery', GRID_SIZE, 0)).toBeNull();
     expect(placeItem(owned, 'bakery', -1, 0)).toBeNull();
     expect(placeItem(initialData(), 'bakery', 0, 0)).toBeNull();
@@ -198,26 +214,26 @@ describe('paths', () => {
 });
 
 describe('moveItem (top-down editing)', () => {
-  const owned = addCards(initialData(), [card('bakery'), card('lamp-post')]);
+  const owned = addCards(initialData(), [card('flower-kiosk'), card('lamp-post')]);
   const built = applyCityOps(owned, [
-    { op: 'place', itemId: 'bakery', x: 1, y: 1 },
+    { op: 'place', itemId: 'flower-kiosk', x: 1, y: 1 },
     { op: 'place', itemId: 'lamp-post', x: 2, y: 2 },
   ]);
 
   it('moves an object to a free lot', () => {
     const s = moveItem(built, 1, 1, 6, 4)!;
     expect(s.city).toEqual([
-      { itemId: 'bakery', x: 6, y: 4 },
+      { itemId: 'flower-kiosk', x: 6, y: 4 },
       { itemId: 'lamp-post', x: 2, y: 2 },
     ]);
     // Moving never changes what is owned or placed.
-    expect(available(s, 'bakery')).toBe(available(built, 'bakery'));
+    expect(available(s, 'flower-kiosk')).toBe(available(built, 'flower-kiosk'));
   });
 
   it('swaps two objects when the target lot is taken', () => {
     const s = moveItem(built, 1, 1, 2, 2)!;
     expect(s.city).toEqual([
-      { itemId: 'bakery', x: 2, y: 2 },
+      { itemId: 'flower-kiosk', x: 2, y: 2 },
       { itemId: 'lamp-post', x: 1, y: 1 },
     ]);
   });
@@ -237,38 +253,38 @@ describe('moveItem (top-down editing)', () => {
       { op: 'move', fx: 2, fy: 2, tx: 3, ty: 3 },
     ]);
     expect(s.city).toEqual([
-      { itemId: 'bakery', x: 3, y: 3 },
+      { itemId: 'flower-kiosk', x: 3, y: 3 },
       { itemId: 'lamp-post', x: 1, y: 1 },
     ]);
   });
 });
 
 describe('applyCityOps', () => {
-  const owned = addCards(initialData(), [card('bakery'), card('lamp-post')]);
+  const owned = addCards(initialData(), [card('flower-kiosk'), card('lamp-post')]);
 
   it('replays queued changes in order', () => {
     const s = applyCityOps(owned, [
-      { op: 'place', itemId: 'bakery', x: 1, y: 1 },
+      { op: 'place', itemId: 'flower-kiosk', x: 1, y: 1 },
       { op: 'place', itemId: 'lamp-post', x: 2, y: 1 },
       { op: 'remove', x: 1, y: 1 },
-      { op: 'place', itemId: 'bakery', x: 5, y: 5 },
+      { op: 'place', itemId: 'flower-kiosk', x: 5, y: 5 },
     ]);
     expect(s.city).toEqual([
       { itemId: 'lamp-post', x: 2, y: 1 },
-      { itemId: 'bakery', x: 5, y: 5 },
+      { itemId: 'flower-kiosk', x: 5, y: 5 },
     ]);
   });
 
   it('skips changes that no longer fit the state', () => {
-    const base = placeItem(owned, 'bakery', 0, 0)!; // e.g. already on the server
+    const base = placeItem(owned, 'flower-kiosk', 0, 0)!; // e.g. already on the server
     const s = applyCityOps(base, [
       { op: 'place', itemId: 'lamp-post', x: 0, y: 0 }, // tile taken
-      { op: 'place', itemId: 'bakery', x: 3, y: 3 }, // no bakery left
+      { op: 'place', itemId: 'flower-kiosk', x: 3, y: 3 }, // no bakery left
       { op: 'remove', x: 9, y: 9 }, // nothing there
       { op: 'place', itemId: 'lamp-post', x: 4, y: 4 },
     ]);
     expect(s.city).toEqual([
-      { itemId: 'bakery', x: 0, y: 0 },
+      { itemId: 'flower-kiosk', x: 0, y: 0 },
       { itemId: 'lamp-post', x: 4, y: 4 },
     ]);
   });
@@ -316,5 +332,80 @@ describe('cleanDisplayName', () => {
   it('strips control characters and counts emoji as one character', () => {
     expect(cleanDisplayName('Ann\u0000a\n')).toBe('Anna');
     expect(cleanDisplayName('🦫'.repeat(20))).toBe('🦫'.repeat(20));
+  });
+});
+
+describe('footprints (multi-lot items)', () => {
+  const owned = addCards(initialData(), [
+    card('grand-theater'),
+    card('corner-cafe'),
+    card('lamp-post'),
+    card('bookshop'),
+    card('bookshop'),
+    card('flower-kiosk'),
+  ]);
+
+  it('covers every lot of the shape, and any of them finds the object', () => {
+    const s = placeItem(owned, 'grand-theater', 4, 4)!; // 3×2: x 4..6, y 4..5
+    expect(objectAt(s, 6, 5)).toEqual({ itemId: 'grand-theater', x: 4, y: 4 });
+    expect(objectAt(s, 7, 5)).toBeUndefined();
+    expect(fits(s, 'lamp-post', 6, 5)).toBe(false);
+    expect(fits(s, 'lamp-post', 7, 4)).toBe(true);
+    // A 3×2 needs room: anchored at x = 14 it would hang off the lawn.
+    expect(fits(owned, 'grand-theater', 13, 14)).toBe(true);
+    expect(fits(owned, 'grand-theater', 14, 14)).toBe(false);
+  });
+
+  it("leaves the L-shaped café's notch free for something else", () => {
+    // ## / #. → covers (0,0) (1,0) (0,1); the notch (1,1) is free.
+    const s = placeItem(owned, 'corner-cafe', 0, 0)!;
+    expect(fits(s, 'lamp-post', 1, 1)).toBe(true);
+    expect(placeItem(s, 'lamp-post', 1, 1)).not.toBeNull();
+    expect(fits(s, 'lamp-post', 0, 1)).toBe(false);
+  });
+
+  it("leaves the mirrored-L diner's notch (front-left) free", () => {
+    // ## / .# → covers (0,0) (1,0) (1,1); the notch (0,1) is free.
+    const s = placeItem(addCards(initialData(), [card('neon-diner')]), 'neon-diner', 3, 3)!;
+    expect(fits(s, 'lamp-post', 3, 4)).toBe(true);
+    expect(fits(s, 'lamp-post', 4, 4)).toBe(false);
+    expect(fits(s, 'ferris-wheel', 14, 13)).toBe(true); // 2×3 just fits the corner
+    expect(fits(s, 'ferris-wheel', 14, 14)).toBe(false);
+  });
+
+  it('moves a big object onto lots it partly covers already', () => {
+    const s = placeItem(owned, 'grand-theater', 4, 4)!;
+    expect(moveItem(s, 4, 4, 5, 4)?.city).toEqual([{ itemId: 'grand-theater', x: 5, y: 4 }]);
+    expect(moveItem(s, 4, 4, 14, 4)).toBeNull(); // off the lawn
+  });
+
+  it('swaps only objects with the same footprint', () => {
+    let s = placeItem(owned, 'bookshop', 0, 0)!;
+    s = placeItem(s, 'bookshop', 0, 1)!;
+    s = placeItem(s, 'lamp-post', 2, 0)!;
+    s = placeItem(s, 'flower-kiosk', 3, 0)!;
+    // Bookshop onto the other bookshop's anchor: swap.
+    expect(moveItem(s, 0, 0, 0, 1)?.city.slice(0, 2)).toEqual([
+      { itemId: 'bookshop', x: 0, y: 1 },
+      { itemId: 'bookshop', x: 0, y: 0 },
+    ]);
+    // Two 1×1s still swap, as before footprints.
+    expect(moveItem(s, 2, 0, 3, 0)).not.toBeNull();
+    // A 2×1 onto a lamp post: different shapes, no swap.
+    expect(moveItem(s, 0, 0, 2, 0)).toBeNull();
+  });
+
+  it('fitCity drops objects that no longer fit, keeping the earlier ones', () => {
+    expect(
+      fitCity([
+        { itemId: 'lamp-post', x: 1, y: 0 },
+        { itemId: 'bakery', x: 0, y: 0 }, // would cover the lamp post
+        { itemId: 'grand-theater', x: 15, y: 3 }, // off the lawn
+        { itemId: 'bakery', x: 2, y: 0 },
+      ]),
+    ).toEqual([
+      { itemId: 'lamp-post', x: 1, y: 0 },
+      { itemId: 'bakery', x: 2, y: 0 },
+    ]);
   });
 });

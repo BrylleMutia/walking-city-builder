@@ -1,7 +1,7 @@
 import { DEFAULT_AVATAR, isAvatarId } from '../data/avatars';
 import { getItem } from '../data/items';
 import type { Rarity } from '../data/rarity';
-import type { ItemId } from '../data/sets/cozyDowntown';
+import type { ItemId } from '../data/sets/types';
 import type { PackCard } from '../logic/openPack';
 import type { GameData, Owned, Placed } from './gameLogic';
 

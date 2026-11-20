@@ -12,7 +12,7 @@ import {
 import React, { memo, useMemo } from 'react';
 import { useDerivedValue, type SharedValue } from 'react-native-reanimated';
 
-import type { CardSet } from '../../data/sets/cozyDowntown';
+import type { CardSet } from '../../data/sets/types';
 import { glareLine, glareOpacity } from '../effects/tilt';
 import { flapAngle, type PackGeometry } from './packGeometry';
 

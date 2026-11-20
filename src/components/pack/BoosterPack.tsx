@@ -16,7 +16,7 @@ import Animated, {
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { CARDS_PER_PACK } from '../../data/rarity';
-import type { CardSet } from '../../data/sets/cozyDowntown';
+import type { CardSet } from '../../data/sets/types';
 import { GlareOverlay } from '../effects/GlareOverlay';
 import { TILT_RELEASE_SPRING, TILT_SPRING, clamp, type Tilt } from '../effects/tilt';
 import { fonts } from '../../theme/tokens';

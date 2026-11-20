@@ -6,7 +6,7 @@ import { tilesPerCard } from '../data/items';
 import { toast } from '../components/ui/toast';
 import { isAvatarId, type AvatarId } from '../data/avatars';
 import { getListing } from '../data/sets';
-import type { ItemId } from '../data/sets/cozyDowntown';
+import type { ItemId } from '../data/sets/types';
 import { setHapticsEnabled } from '../lib/haptics';
 import type { PackCard } from '../logic/openPack';
 import * as api from './backend';

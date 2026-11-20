@@ -1,6 +1,6 @@
-import { isWalkable, tilesPerCard } from '../data/items';
+import { cellsOf, isWalkable, sameFootprint, tilesPerCard } from '../data/items';
 import { DEFAULT_AVATAR, type AvatarId } from '../data/avatars';
-import type { ItemId } from '../data/sets/cozyDowntown';
+import type { ItemId } from '../data/sets/types';
 
 /** Pure game rules. No React, no storage: easy to test and to reason about. */
 
@@ -181,8 +181,59 @@ export function available(s: Pick<GameData, 'collection' | 'city'>, itemId: Item
   return (s.collection[itemId]?.count ?? 0) - placedCount(s, itemId);
 }
 
+/** The object stored at exactly this anchor lot (not just covering it). */
 export function tileAt(s: Pick<GameData, 'city'>, x: number, y: number): Placed | undefined {
   return s.city.find((p) => p.x === x && p.y === y);
+}
+
+const onGrid = (x: number, y: number) =>
+  Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < GRID_SIZE && y < GRID_SIZE;
+
+/** Lot index → index in `city` of the object covering it, or -1. */
+export function occupancy(city: readonly Placed[]): Int16Array {
+  const lots = new Int16Array(GRID_SIZE * GRID_SIZE).fill(-1);
+  city.forEach((p, i) => {
+    for (const [dx, dy] of cellsOf(p.itemId)) {
+      const x = p.x + dx;
+      const y = p.y + dy;
+      if (onGrid(x, y)) lots[y * GRID_SIZE + x] = i;
+    }
+  });
+  return lots;
+}
+
+/** The object covering lot (x, y), whichever of its cells that is. */
+export function objectAt(s: Pick<GameData, 'city'>, x: number, y: number): Placed | undefined {
+  if (!onGrid(x, y)) return undefined;
+  for (const p of s.city) {
+    for (const [dx, dy] of cellsOf(p.itemId)) {
+      if (p.x + dx === x && p.y + dy === y) return p;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Whether `itemId` anchored at (x, y) lies fully on the lawn without covering
+ * another object. `ignore` objects don't count (the ones being moved).
+ */
+export function fits(
+  s: Pick<GameData, 'city'>,
+  itemId: ItemId,
+  x: number,
+  y: number,
+  ignore: readonly Placed[] = [],
+): boolean {
+  if (!Number.isInteger(x) || !Number.isInteger(y)) return false;
+  const lots = occupancy(s.city);
+  for (const [dx, dy] of cellsOf(itemId)) {
+    const cx = x + dx;
+    const cy = y + dy;
+    if (!onGrid(cx, cy)) return false;
+    const owner = lots[cy * GRID_SIZE + cx];
+    if (owner >= 0 && !ignore.includes(s.city[owner])) return false;
+  }
+  return true;
 }
 
 export function placeItem<T extends GameData>(
@@ -191,30 +242,32 @@ export function placeItem<T extends GameData>(
   x: number,
   y: number,
 ): T | null {
-  const inside = x >= 0 && y >= 0 && x < GRID_SIZE && y < GRID_SIZE;
-  if (!inside || !Number.isInteger(x) || !Number.isInteger(y)) return null;
-  if (tileAt(s, x, y) || available(s, itemId) <= 0) return null;
+  if (available(s, itemId) <= 0 || !fits(s, itemId, x, y)) return null;
   return { ...s, city: [...s.city, { itemId, x, y }] };
 }
 
+/** Removes the object anchored at (x, y). */
 export function removeAt<T extends GameData>(s: T, x: number, y: number): T | null {
   if (!tileAt(s, x, y)) return null;
   return { ...s, city: s.city.filter((p) => !(p.x === x && p.y === y)) };
 }
 
-const onGrid = (x: number, y: number) =>
-  Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < GRID_SIZE && y < GRID_SIZE;
-
 /**
- * Moves the object on (fx, fy) to (tx, ty). If that lot is taken, the two
- * objects swap places (same rule as the server's move_item). Null when the
- * source is empty, the target is off the lawn, or both are the same lot.
+ * Moves the object anchored at (fx, fy) so its anchor lands on (tx, ty), if it
+ * fits there (its own old lots don't count). When it doesn't, but an object
+ * with the very same footprint is anchored at (tx, ty), the two swap places.
+ * Same rule as the server's move_item. Null when nothing is anchored at the
+ * source, both are the same lot, or neither works.
  */
 export function moveItem<T extends GameData>(s: T, fx: number, fy: number, tx: number, ty: number): T | null {
   if (!onGrid(tx, ty) || (fx === tx && fy === ty)) return null;
   const from = tileAt(s, fx, fy);
   if (!from) return null;
+  if (fits(s, from.itemId, tx, ty, [from])) {
+    return { ...s, city: s.city.map((p) => (p === from ? { ...p, x: tx, y: ty } : p)) };
+  }
   const to = tileAt(s, tx, ty);
+  if (!to || !sameFootprint(from.itemId, to.itemId)) return null;
   return {
     ...s,
     city: s.city.map((p) => {
@@ -223,6 +276,19 @@ export function moveItem<T extends GameData>(s: T, fx: number, fy: number, tx: n
       return p;
     }),
   };
+}
+
+/**
+ * Keeps the objects that fit, in order, dropping any that would leave the lawn
+ * or cover an earlier one (they return to the inventory: "available" is owned
+ * minus placed). For cities laid out before items had real footprints.
+ */
+export function fitCity(city: readonly Placed[]): Placed[] {
+  const kept: Placed[] = [];
+  for (const p of city) {
+    if (fits({ city: kept }, p.itemId, p.x, p.y)) kept.push(p);
+  }
+  return kept;
 }
 
 /** A city change made locally that the server hasn't confirmed yet. */
@@ -300,7 +366,7 @@ const STEPS: readonly [bit: number, dx: number, dy: number][] = [
 ];
 
 function walkableAt(s: Pick<GameData, 'city'>, x: number, y: number): boolean {
-  const t = tileAt(s, x, y);
+  const t = objectAt(s, x, y);
   return !!t && isWalkable(t.itemId);
 }
 

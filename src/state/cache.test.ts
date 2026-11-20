@@ -105,6 +105,26 @@ describe('sanitizeCache', () => {
     expect(sanitizeCache({}, TODAY).avatarId).toBe('sprout');
   });
 
+  it('takes back objects whose footprint no longer fits (caches from before multi-lot items)', () => {
+    const out = sanitizeCache(
+      {
+        collection: { bakery: { count: 1, foil: 0 }, 'lamp-post': { count: 1, foil: 0 }, 'grand-theater': { count: 1, foil: 0 } },
+        city: [
+          { itemId: 'lamp-post', x: 3, y: 3 },
+          { itemId: 'bakery', x: 2, y: 3 }, // its right half is the lamp post's lot
+          { itemId: 'grand-theater', x: 14, y: 0 }, // 3 wide: off the lawn
+        ],
+      },
+      TODAY,
+    );
+    expect(out.city).toEqual([{ itemId: 'lamp-post', x: 3, y: 3 }]);
+  });
+
+  it('resets a broken haul', () => {
+    expect(sanitizeCache({ haul: 'lots' }, TODAY).haul).toEqual({ steps: 0, wood: 0 });
+    expect(sanitizeCache({ haul: { steps: -4, wood: 12.8 } }, TODAY).haul).toEqual({ steps: 0, wood: 12 });
+  });
+
   it('treats a missing or broken onboarding flag as "not onboarded"', () => {
     expect(sanitizeCache({ onboarded: 'yes', profilePending: 1 }, TODAY)).toMatchObject({
       onboarded: false,

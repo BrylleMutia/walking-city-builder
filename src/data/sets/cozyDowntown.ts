@@ -1,6 +1,6 @@
-import type { Rarity } from '../rarity';
+import type { CardSet } from './types';
 
-export type ItemId =
+export type CozyDowntownId =
   | 'cobblestone-street'
   | 'brick-sidewalk'
   | 'pocket-lawn'
@@ -14,44 +14,6 @@ export type ItemId =
   | 'bookshop'
   | 'clock-tower'
   | 'grand-theater';
-
-/**
- * - path: ground infrastructure (streets, sidewalks, lawns). Walkable, auto-connects
- *   to neighbouring paths, and comes in bundles of several tiles per card.
- * - prop: small street furniture (lamps, benches).
- * - building: everything with walls.
- */
-export type ItemKind = 'path' | 'prop' | 'building';
-
-export interface ItemDef {
-  id: ItemId;
-  name: string;
-  rarity: Rarity;
-  kind: ItemKind;
-  flavor: string;
-  /** Tiles the item will occupy on the isometric city grid (w × d). */
-  footprint: [number, number];
-  /** City tiles granted per card pulled (bundles for paths). Defaults to 1. */
-  tilesPerCard?: number;
-  /** Townsfolk can walk on it (future NPCs path along these tiles). */
-  walkable?: boolean;
-}
-
-export interface CardSet {
-  id: string;
-  name: string;
-  tagline: string;
-  /** Wrapper palette, top → bottom. */
-  wrapper: {
-    gradient: [string, string, string];
-    skyline: string;
-    skylineFar: string;
-    window: string;
-    ink: string;
-    sun: string;
-  };
-  items: ItemDef[];
-}
 
 export const cozyDowntown: CardSet = {
   id: 'cozy-downtown',
@@ -73,7 +35,7 @@ export const cozyDowntown: CardSet = {
       rarity: 'common',
       kind: 'path',
       flavor: 'Every stone polished by a thousand strolls.',
-      footprint: [1, 1],
+      shape: ['#'],
       tilesPerCard: 4,
       walkable: true,
     },
@@ -83,7 +45,7 @@ export const cozyDowntown: CardSet = {
       rarity: 'common',
       kind: 'path',
       flavor: 'Mind the one wobbly brick.',
-      footprint: [1, 1],
+      shape: ['#'],
       tilesPerCard: 4,
       walkable: true,
     },
@@ -93,7 +55,7 @@ export const cozyDowntown: CardSet = {
       rarity: 'common',
       kind: 'path',
       flavor: 'A patch of green for a lunchtime sit.',
-      footprint: [1, 1],
+      shape: ['#'],
       tilesPerCard: 2,
       walkable: true,
     },
@@ -103,7 +65,7 @@ export const cozyDowntown: CardSet = {
       rarity: 'common',
       kind: 'prop',
       flavor: 'Flickers on at dusk, right on time.',
-      footprint: [1, 1],
+      shape: ['#'],
     },
     {
       id: 'park-bench',
@@ -111,7 +73,7 @@ export const cozyDowntown: CardSet = {
       rarity: 'common',
       kind: 'prop',
       flavor: 'Best seat in town after a long walk.',
-      footprint: [1, 1],
+      shape: ['#'],
     },
     {
       id: 'brick-townhouse',
@@ -119,7 +81,7 @@ export const cozyDowntown: CardSet = {
       rarity: 'uncommon',
       kind: 'building',
       flavor: 'Three floors, one very steep staircase.',
-      footprint: [1, 1],
+      shape: ['#', '#'],
     },
     {
       id: 'corner-cafe',
@@ -127,7 +89,7 @@ export const cozyDowntown: CardSet = {
       rarity: 'uncommon',
       kind: 'building',
       flavor: 'The espresso machine never sleeps.',
-      footprint: [1, 1],
+      shape: ['##', '#.'],
     },
     {
       id: 'bakery',
@@ -135,7 +97,7 @@ export const cozyDowntown: CardSet = {
       rarity: 'uncommon',
       kind: 'building',
       flavor: 'Follow the smell of warm bread.',
-      footprint: [1, 1],
+      shape: ['##'],
     },
     {
       id: 'flower-kiosk',
@@ -143,7 +105,7 @@ export const cozyDowntown: CardSet = {
       rarity: 'uncommon',
       kind: 'building',
       flavor: 'Fresh tulips every Tuesday.',
-      footprint: [1, 1],
+      shape: ['#'],
     },
     {
       id: 'fountain-plaza',
@@ -151,7 +113,7 @@ export const cozyDowntown: CardSet = {
       rarity: 'rare',
       kind: 'building',
       flavor: 'Toss a coin, make a wish.',
-      footprint: [2, 2],
+      shape: ['##', '##'],
     },
     {
       id: 'bookshop',
@@ -159,7 +121,7 @@ export const cozyDowntown: CardSet = {
       rarity: 'rare',
       kind: 'building',
       flavor: 'Smells like rain and old paper.',
-      footprint: [1, 1],
+      shape: ['##'],
     },
     {
       id: 'clock-tower',
@@ -167,7 +129,7 @@ export const cozyDowntown: CardSet = {
       rarity: 'epic',
       kind: 'building',
       flavor: 'The whole street sets its watch by it.',
-      footprint: [1, 1],
+      shape: ['#'],
     },
     {
       id: 'grand-theater',
@@ -175,7 +137,7 @@ export const cozyDowntown: CardSet = {
       rarity: 'legendary',
       kind: 'building',
       flavor: 'Tonight only: standing ovations.',
-      footprint: [2, 2],
+      shape: ['###', '###'],
     },
   ],
 };

@@ -1,6 +1,6 @@
-import type { ItemId } from '../../data/sets/cozyDowntown';
+import type { ItemId } from '../../data/sets/types';
 import { DIR } from '../../state/gameLogic';
-import { ball, box, floor, ground, type Shape } from './iso';
+import { ball, box, cylinder, floor, ground, spot, type Shape } from './iso';
 
 /**
  * Path tiles (streets, sidewalks, lawns) are flat pieces that change shape with
@@ -11,15 +11,28 @@ import { ball, box, floor, ground, type Shape } from './iso';
  * same-coloured pieces into one path per colour to keep draw calls low.
  */
 
-export type PathId = Extract<ItemId, 'cobblestone-street' | 'brick-sidewalk' | 'pocket-lawn'>;
+export type PathId = Extract<
+  ItemId,
+  'cobblestone-street' | 'brick-sidewalk' | 'pocket-lawn' | 'boardwalk-planks' | 'quay-stones' | 'sandy-strip'
+>;
 
-export const PATH_IDS: readonly PathId[] = ['cobblestone-street', 'brick-sidewalk', 'pocket-lawn'];
+export const PATH_IDS: readonly PathId[] = [
+  'cobblestone-street',
+  'brick-sidewalk',
+  'pocket-lawn',
+  'boardwalk-planks',
+  'quay-stones',
+  'sandy-strip',
+];
 
 /** Shape shown on cards and in the inventory, where there are no neighbours. */
 export const DEFAULT_MASK: Record<PathId, number> = {
   'cobblestone-street': DIR.E | DIR.W, // a straight stretch reads as "street"
   'brick-sidewalk': 0,
   'pocket-lawn': 0,
+  'boardwalk-planks': DIR.E | DIR.W,
+  'quay-stones': 0,
+  'sandy-strip': 0,
 };
 
 const has = (mask: number, bit: number) => (mask & bit) !== 0;
@@ -125,10 +138,98 @@ function lawn(mask: number): Shape[] {
   return [...ground('#8CCB6A'), ...merge(tufts), ...back, ...flowers, ...front];
 }
 
+/** Boardwalk planks (Neon Harbor): a deck of planks over the water, with posts
+ * and a rope rail along edges that don't continue into another path. */
+function boardwalk(mask: number): Shape[] {
+  const planks: Shape[] = [];
+  for (let i = 0; i < 8; i++) {
+    const tone = i % 3 === 0 ? '#A9784E' : i % 3 === 1 ? '#B98A5E' : '#B08154';
+    planks.push(...floor(i * 0.5 + 0.04, 0, 0.003, 0.42, 4, tone));
+  }
+  // nail heads where the planks cross the joists
+  const nails: Shape[] = [];
+  for (let i = 0; i < 8; i++) for (const y of [0.5, 2.0, 3.5]) nails.push(...floor(i * 0.5 + 0.22, y, 0.004, 0.06, 0.06, '#6B4A34'));
+  const back: Shape[] = [];
+  const front: Shape[] = [];
+  const post = '#5E3B26';
+  const rope = '#E8D7B0';
+  const rail = (out: Shape[], x: number, y: number, alongX: boolean) => {
+    const [ex, ey] = alongX ? [3.6, 0] : [0, 3.6];
+    out.push(
+      ...box(x, y, 0, 0.22, 0.22, 0.6, post),
+      ...box(x + ex, y + ey, 0, 0.22, 0.22, 0.6, post),
+      ...(alongX ? box(x + 0.1, y + 0.08, 0.42, 3.6, 0.06, 0.06, rope) : box(x + 0.08, y + 0.1, 0.42, 0.06, 3.6, 0.06, rope)),
+    );
+  };
+  if (!has(mask, DIR.N)) rail(back, 0.1, 0.1, true);
+  if (!has(mask, DIR.W)) rail(back, 0.1, 0.1, false);
+  if (!has(mask, DIR.S)) rail(front, 0.1, 3.68, true);
+  if (!has(mask, DIR.E)) rail(front, 3.68, 0.1, false);
+  return [...ground('#4F8FB0'), ...floor(0, 0, 0.002, 4, 4, '#6B4A34'), ...merge(planks), ...merge(nails), ...back, ...front];
+}
+
+/** Quay stones (Neon Harbor): granite flags with a yellow safety line and a
+ * bollard along edges that don't continue into another path. */
+function quay(mask: number): Shape[] {
+  const flags: Shape[] = [];
+  for (let i = 0; i < 4; i++) {
+    for (let j = 0; j < 4; j++) {
+      const tone = (i * 7 + j * 3) % 4 === 0 ? '#A9B1BB' : (i + j) % 2 === 0 ? '#9AA3AE' : '#A2AAB4';
+      flags.push(...floor(i + 0.05, j + 0.05, 0.003, 0.9, 0.9, tone));
+    }
+  }
+  const lines: Shape[] = [];
+  const yellow = '#F2C230';
+  if (!has(mask, DIR.N)) lines.push(...floor(0, 0.25, 0.004, 4, 0.14, yellow));
+  if (!has(mask, DIR.W)) lines.push(...floor(0.25, 0, 0.004, 0.14, 4, yellow));
+  if (!has(mask, DIR.S)) lines.push(...floor(0, 3.61, 0.004, 4, 0.14, yellow));
+  if (!has(mask, DIR.E)) lines.push(...floor(3.61, 0, 0.004, 0.14, 4, yellow));
+  const bollards: Shape[] = [];
+  const bollard = (x: number, y: number) =>
+    bollards.push(...cylinder(x, y, 0, 0.2, 0.32, '#3B4252'), ...cylinder(x, y, 0.32, 0.27, 0.08, '#4C566A'));
+  if (!has(mask, DIR.S)) bollard(2, 3.75);
+  if (!has(mask, DIR.E)) bollard(3.75, 2);
+  return [...ground('#7E8792'), ...merge(flags), ...merge(lines), ...bollards];
+}
+
+/** Sandy strip (Neon Harbor): beach sand with shells and a starfish; edges
+ * that don't continue into another path meet the sea with a line of foam. */
+function sand(mask: number): Shape[] {
+  const ripples: Shape[] = [];
+  for (const [x, y, w] of [
+    [0.4, 0.6, 1.4],
+    [2.2, 1.0, 1.2],
+    [0.8, 1.9, 1.6],
+    [2.5, 2.6, 1.0],
+    [0.5, 3.1, 1.2],
+  ]) {
+    ripples.push(...floor(x, y, 0.003, w, 0.12, '#F6E8C3'));
+  }
+  const sea: Shape[] = [];
+  const water = '#6FC3E3';
+  const foam = '#F4FBFF';
+  if (!has(mask, DIR.N)) sea.push(...floor(0, 0, 0.004, 4, 0.45, water), ...floor(0, 0.45, 0.005, 4, 0.1, foam));
+  if (!has(mask, DIR.W)) sea.push(...floor(0, 0, 0.004, 0.45, 4, water), ...floor(0.45, 0, 0.005, 0.1, 4, foam));
+  if (!has(mask, DIR.S)) sea.push(...floor(0, 3.55, 0.004, 4, 0.45, water), ...floor(0, 3.45, 0.005, 4, 0.1, foam));
+  if (!has(mask, DIR.E)) sea.push(...floor(3.55, 0, 0.004, 0.45, 4, water), ...floor(3.45, 0, 0.005, 0.1, 4, foam));
+  const bits: Shape[] = [
+    ...ball(1.3, 1.4, 0.08, 0.1, '#FFFFFF'),
+    ...ball(2.8, 2.0, 0.08, 0.09, '#F7B9C4'),
+    ...ball(1.9, 2.9, 0.08, 0.1, '#FFF0D6'),
+    // starfish
+    ...spot(2.6, 1.4, 0.01, 0.22, 0.07, '#FF8A5C'),
+    ...spot(2.6, 1.4, 0.01, 0.07, 0.15, '#FF8A5C'),
+  ];
+  return [...ground('#EBD49B'), ...merge(ripples), ...merge(sea), ...bits];
+}
+
 const BUILD: Record<PathId, (mask: number) => Shape[]> = {
   'cobblestone-street': street,
   'brick-sidewalk': sidewalk,
   'pocket-lawn': lawn,
+  'boardwalk-planks': boardwalk,
+  'quay-stones': quay,
+  'sandy-strip': sand,
 };
 
 /** Tallest point of each path (hedges, kerbs), in tile units. */
@@ -136,6 +237,9 @@ export const PATH_HEIGHT: Record<PathId, number> = {
   'cobblestone-street': 0.4,
   'brick-sidewalk': 0.5,
   'pocket-lawn': 0.8,
+  'boardwalk-planks': 0.7,
+  'quay-stones': 0.45,
+  'sandy-strip': 0.2,
 };
 
 const cache = new Map<string, Shape[]>();

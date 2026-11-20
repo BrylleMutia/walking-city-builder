@@ -2,7 +2,7 @@ import { Circle, Group, Oval, Path, Rect, RoundedRect, vec } from '@shopify/reac
 import React, { memo } from 'react';
 import { useDerivedValue, type SharedValue } from 'react-native-reanimated';
 
-import type { ItemId } from '../../data/sets/cozyDowntown';
+import type { ItemId } from '../../data/sets/types';
 import { getListing } from '../../data/sets';
 import { colors } from '../../theme/tokens';
 import { ItemArt } from '../items/ItemArt';

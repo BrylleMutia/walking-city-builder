@@ -20,7 +20,7 @@ import { Tap } from '../../components/ui/Tap';
 import { toast } from '../../components/ui/toast';
 import { RARITY_COLOR, RARITY_LABEL, RARITY_ORDER, RARITY_WEIGHTS, FOIL_CHANCE } from '../../data/rarity';
 import { getListing, type SetListing } from '../../data/sets';
-import type { ItemDef } from '../../data/sets/cozyDowntown';
+import type { ItemDef } from '../../data/sets/types';
 import { buyErrorMessage } from '../../state/messages';
 import { stepsForWood } from '../../state/gameLogic';
 import { useGameStore } from '../../state/useGameStore';

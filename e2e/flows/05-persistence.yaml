@@ -29,5 +29,5 @@ appId: host.exp.exponent
     text: "2[0-9][0-9]"
 - tapOn:
     id: tab-city
-- assertVisible: "1 of 256 lots built"
+- assertVisible: "[1-6] of 256 lots built"
 - takeScreenshot: 05-after-restart

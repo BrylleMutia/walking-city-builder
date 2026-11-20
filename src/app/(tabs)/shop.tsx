@@ -7,7 +7,7 @@ import { PackThumb } from '../../components/ui/illustrations';
 import { ArrowButton, Card, Meta, SectionHeader, WoodPill, formatNumber } from '../../components/ui/kit';
 import { Screen } from '../../components/ui/Screen';
 import { Tap } from '../../components/ui/Tap';
-import { SET_LISTINGS, type SetListing } from '../../data/sets';
+import { SET_LISTINGS, setCountLabel, setSummary, type SetListing } from '../../data/sets';
 import { useGameStore } from '../../state/useGameStore';
 import { cardShadow } from '../../theme/tokens';
 
@@ -50,7 +50,7 @@ export default function ShopScreen() {
               {featured.name} is out now
             </AppText>
             <AppText tone="muted" className="text-xs mt-0.5">
-              10 buildings · 5 cards a pack · 2% legendary
+              {featured.set ? setSummary(featured.set) : featured.tagline}
             </AppText>
           </View>
           <ArrowButton onPress={() => router.push(`/set/${featured.id}`)} />
@@ -58,7 +58,7 @@ export default function ShopScreen() {
       </View>
 
       <View className="mt-7">
-        <SectionHeader title="Booster Packs" action={`${SET_LISTINGS.length} sets`} />
+        <SectionHeader title="Booster packs" action={setCountLabel()} />
       </View>
       <ScrollView
         horizontal

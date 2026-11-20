@@ -1,4 +1,4 @@
-import { Canvas, Group, Path, RoundedRect, vec } from '@shopify/react-native-skia';
+import { Canvas, Group, Path, PathOp, Skia, rrect, rect, vec, type SkPath } from '@shopify/react-native-skia';
 import React, { forwardRef, memo, useEffect, useImperativeHandle, useMemo, useState } from 'react';
 import { View, type LayoutChangeEvent } from 'react-native';
 import {
@@ -21,15 +21,16 @@ import {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { getItem } from '../../data/items';
+import { cellsOf, getItem, type Cell } from '../../data/items';
 import { RARITY_COLOR } from '../../data/rarity';
-import type { ItemId } from '../../data/sets/cozyDowntown';
+import type { ItemId } from '../../data/sets/types';
 import { haptic } from '../../lib/haptics';
-import { GRID_SIZE, pathMask, type Placed } from '../../state/gameLogic';
+import { depthOrder } from '../../logic/depthOrder';
+import { GRID_SIZE, occupancy, pathMask, type Placed } from '../../state/gameLogic';
 import { colors } from '../../theme/tokens';
 import { project, shade, type Shape } from '../items/iso';
 import { ItemArt } from '../items/ItemArt';
-import { getItemArt } from '../items/itemShapes';
+import { getItemArt, type ArtPiece } from '../items/itemShapes';
 import { getPathShapes, isPathId } from '../items/pathShapes';
 
 /** One grid tile spans this many iso units (the item drawings use a 4×4 footprint). */
@@ -84,13 +85,19 @@ interface Props {
   selected: { x: number; y: number } | null;
   /** 'top' shows the lawn from above, for editing (tokens + drag to move/swap). */
   view: 'iso' | 'top';
-  /** Grid tile that was tapped (may be outside the grid → -1). */
+  /**
+   * A lot was tapped (-1 outside the grid). A tap on a building's walls or roof
+   * reports that building's anchor; a tap on the ground reports that lot.
+   */
   onTileTap: (x: number, y: number) => void;
-  /** Top view: an object was dragged from one lot to another (taken lot = swap). */
+  /** Top view: an object was dragged so its anchor moves from one lot to another (same shape there = swap). */
   onMove: (fx: number, fy: number, tx: number, ty: number) => void;
 }
 
 const fmt = (v: number) => Math.round(v * 1000) / 1000;
+
+/** A 1×1 piece (path tiles). */
+const UNIT_RECT: ArtPiece['rect'] = [0, 0, 1, 1];
 
 function diamond(x: number, y: number): string {
   const p = [
@@ -100,6 +107,58 @@ function diamond(x: number, y: number): string {
     project(x * TILE, (y + 1) * TILE, 0),
   ];
   return `M${fmt(p[0][0])} ${fmt(p[0][1])} L${fmt(p[1][0])} ${fmt(p[1][1])} L${fmt(p[2][0])} ${fmt(p[2][1])} L${fmt(p[3][0])} ${fmt(p[3][1])} Z `;
+}
+
+/**
+ * Outline of a set of lots on the ground: only the edges that don't touch
+ * another lot of the set, so a multi-lot object gets one border, not a grid.
+ */
+function outline(cells: readonly (readonly [number, number])[]): string {
+  const has = new Set(cells.map(([x, y]) => `${x},${y}`));
+  const pt = (x: number, y: number) => project(x * TILE, y * TILE, 0).map(fmt).join(' ');
+  let d = '';
+  for (const [x, y] of cells) {
+    if (!has.has(`${x},${y - 1}`)) d += `M${pt(x, y)} L${pt(x + 1, y)} `;
+    if (!has.has(`${x + 1},${y}`)) d += `M${pt(x + 1, y)} L${pt(x + 1, y + 1)} `;
+    if (!has.has(`${x},${y + 1}`)) d += `M${pt(x + 1, y + 1)} L${pt(x, y + 1)} `;
+    if (!has.has(`${x - 1},${y}`)) d += `M${pt(x, y + 1)} L${pt(x, y)} `;
+  }
+  return d;
+}
+
+/**
+ * Top view: the token under an object, one rounded shape covering its whole
+ * footprint (an L stays one L, without a seam between its pieces). Unit = one
+ * lot on the top-down grid (TILE · K). Memoised per item.
+ */
+const tokenPaths = new Map<ItemId, SkPath>();
+function tokenPath(itemId: ItemId): SkPath {
+  let path = tokenPaths.get(itemId);
+  if (path) return path;
+  const L = TILE * K;
+  const m = 0.3;
+  const pieces = getItemArt(itemId).pieces;
+  for (const pc of pieces) {
+    const [dx, dy, w, d] = pc.rect;
+    // Sides shared in full with another piece reach across the gap, so the union is seamless.
+    const shared = (side: 'l' | 'r' | 't' | 'b') =>
+      pieces.some((o) => {
+        if (o === pc) return false;
+        const [ox, oy, ow, od] = o.rect;
+        if (side === 't') return oy + od === dy && ox <= dx && ox + ow >= dx + w;
+        if (side === 'b') return oy === dy + d && ox <= dx && ox + ow >= dx + w;
+        if (side === 'l') return ox + ow === dx && oy <= dy && oy + od >= dy + d;
+        return ox === dx + w && oy <= dy && oy + od >= dy + d;
+      });
+    const x0 = dx * L + (shared('l') ? -m : m);
+    const y0 = dy * L + (shared('t') ? -m : m);
+    const x1 = (dx + w) * L - (shared('r') ? -m : m);
+    const y1 = (dy + d) * L - (shared('b') ? -m : m);
+    const one = Skia.PathBuilder.Make().addRRect(rrect(rect(x0, y0, x1 - x0, y1 - y0), 1, 1)).detach();
+    path = path ? (Skia.Path.MakeFromOp(path, one, PathOp.Union) ?? path) : one;
+  }
+  tokenPaths.set(itemId, path!);
+  return path!;
 }
 
 /** Static ground geometry: two checker colours plus the slab's side faces. */
@@ -127,11 +186,15 @@ const Building = memo(function Building({
   shapes,
   x,
   y,
+  rect: pieceRect,
   dragFrom,
 }: {
   shapes: Shape[];
+  /** The object's anchor lot. */
   x: number;
   y: number;
+  /** This piece's lots relative to the anchor (the whole object for rectangles). */
+  rect: ArtPiece['rect'];
   dragFrom: SharedValue<number>;
 }) {
   const [ox, oy] = project(x * TILE, y * TILE, 0);
@@ -147,8 +210,8 @@ const Building = memo(function Building({
   const opacity = useDerivedValue(() => (dragFrom.value === index ? 0.3 : 1));
   return (
     <Group transform={[{ translateX: ox }, { translateY: oy }]} opacity={opacity}>
-      {/* grow from the tile's front corner so it rises out of the ground */}
-      <Group origin={vec(0, TILE)} transform={transform}>
+      {/* grow from the piece's front corner so it rises out of the ground */}
+      <Group origin={vec(...project((pieceRect[0] + pieceRect[2]) * TILE, (pieceRect[1] + pieceRect[3]) * TILE, 0))} transform={transform}>
         {shapes.map((s, i) => (
           <Path key={i} path={s.d} color={s.color} />
         ))}
@@ -157,16 +220,25 @@ const Building = memo(function Building({
   );
 });
 
-/** The tile behind a token: rarity-tinted rounded square with a soft drop shadow. */
+/**
+ * The tile behind a token: a rarity-tinted rounded shape covering the item's
+ * footprint, with a soft drop shadow. Drawn from the anchor lot's top-left corner.
+ */
 function TokenFace({ itemId }: { itemId: ItemId }) {
   const tint = RARITY_COLOR[getItem(itemId)?.rarity ?? 'common'];
+  const shape = tokenPath(itemId);
+  const [w, d] = getItemArt(itemId).size;
+  const bw = w * TILE * K;
+  const bh = d * TILE * K;
   return (
     <>
-      <RoundedRect x={0.1} y={0.35} width={TOKEN} height={TOKEN} r={1} color="rgba(30,50,30,0.18)" />
-      <RoundedRect x={0} y={0} width={TOKEN} height={TOKEN} r={1} color={tint.light} />
-      <RoundedRect x={0} y={0} width={TOKEN} height={TOKEN} r={1} style="stroke" strokeWidth={0.16} color={tint.main} />
+      <Group transform={[{ translateX: 0.1 }, { translateY: 0.35 }]}>
+        <Path path={shape} color="rgba(30,50,30,0.18)" />
+      </Group>
+      <Path path={shape} color={tint.light} />
+      <Path path={shape} style="stroke" strokeWidth={0.16} color={tint.main} />
       {/* The art stands on its token and may rise above it: bigger, so it reads at map size. */}
-      <ItemArt id={itemId} x={-0.1 * TOKEN} y={-0.3 * TOKEN} width={1.2 * TOKEN} height={1.25 * TOKEN} />
+      <ItemArt id={itemId} x={-0.1 * bw} y={-0.3 * bh} width={1.2 * bw} height={1.25 * bh} />
     </>
   );
 }
@@ -183,7 +255,9 @@ const Token = memo(function Token({
   y: number;
   dragFrom: SharedValue<number>;
 }) {
-  const [cx, cy] = toTop(x * TILE + TILE / 2, y * TILE + TILE / 2);
+  const [w, d] = getItemArt(itemId).size;
+  // Pops around the middle of its footprint.
+  const [cx, cy] = toTop((x + w / 2) * TILE, (y + d / 2) * TILE);
   const index = y * GRID_SIZE + x;
   const pop = useSharedValue(0.75);
   useEffect(() => {
@@ -193,8 +267,8 @@ const Token = memo(function Token({
     { translateX: cx },
     { translateY: cy },
     { scale: pop.value },
-    { translateX: -TOKEN / 2 },
-    { translateY: -TOKEN / 2 },
+    { translateX: (-w * TILE * K) / 2 },
+    { translateY: (-d * TILE * K) / 2 },
   ]);
   const opacity = useDerivedValue(() => (dragFrom.value === index ? 0.3 : 1));
   return (
@@ -234,21 +308,52 @@ export const CityMap = memo(
       top.set(withSpring(view === 'top' ? 1 : 0, VIEW_SPRING));
     }, [view, top]);
 
-    // Drag-to-move (top view): which lot is lifted, where the finger is, which lot it's over.
+    // Drag-to-move (top view): the lifted object's anchor lot, which of its lots
+    // the finger holds (offset from the anchor), where the finger is, and where
+    // the anchor would land (may be off the lawn while dragging).
     const dragFrom = useSharedValue(-1);
-    const hover = useSharedValue(-1);
+    const grabX = useSharedValue(0);
+    const grabY = useSharedValue(0);
+    const hoverX = useSharedValue(0);
+    const hoverY = useSharedValue(0);
+    /** 0 nothing under the finger, 1 fits, 2 swap, 3 blocked or off the lawn. */
+    const hoverState = useSharedValue(0);
     const dragX = useSharedValue(0);
     const dragY = useSharedValue(0);
     const lift = useSharedValue(0);
     const [dragItem, setDragItem] = useState<ItemId | null>(null);
 
-    // Which lots are taken, readable from gesture worklets.
-    const occupied = useSharedValue<number[]>([]);
+    // For gesture worklets: which anchor lot covers each lot (-1 = free), and
+    // each anchor's footprint as flat [dx, dy, dx, dy, …].
+    const owner = useSharedValue<number[]>([]);
+    const shapeAt = useSharedValue<Record<number, number[]>>({});
     useEffect(() => {
-      const lots = new Array<number>(GRID_SIZE * GRID_SIZE).fill(0);
-      for (const p of placed) lots[p.y * GRID_SIZE + p.x] = 1;
-      occupied.set(lots);
-    }, [placed, occupied]);
+      const occ = occupancy(placed);
+      owner.set(Array.from(occ, (i) => (i < 0 ? -1 : placed[i].y * GRID_SIZE + placed[i].x)));
+      const shapes: Record<number, number[]> = {};
+      for (const p of placed) shapes[p.y * GRID_SIZE + p.x] = cellsOf(p.itemId).flat();
+      shapeAt.set(shapes);
+    }, [placed, owner, shapeAt]);
+
+    /** Where the dragged object would land with its anchor on (ax, ay): fits, swap or blocked. */
+    const judge = (ax: number, ay: number): number => {
+      'worklet';
+      const from = dragFrom.value;
+      const cells = shapeAt.value[from] ?? [0, 0];
+      let free = true;
+      for (let i = 0; i < cells.length; i += 2) {
+        const x = ax + cells[i];
+        const y = ay + cells[i + 1];
+        if (x < 0 || y < 0 || x >= GRID_SIZE || y >= GRID_SIZE) return 3;
+        const o = owner.value[y * GRID_SIZE + x];
+        if (o >= 0 && o !== from) free = false;
+      }
+      if (free) return 1;
+      // Swap: an object with the very same footprint anchored right there.
+      const other = shapeAt.value[ay * GRID_SIZE + ax];
+      if (other && other.length === cells.length && other.every((v, i) => v === cells[i])) return 2;
+      return 3;
+    };
 
     useEffect(() => {
       pulse.set(
@@ -377,13 +482,18 @@ export const CityMap = memo(
         'worklet';
         const [lx, ly] = toLocal(e.x, e.y);
         const lot = topCell(lx, ly);
-        if (lot >= 0 && occupied.value[lot] === 1) {
-          dragFrom.set(lot);
-          hover.set(lot);
+        const anchor = lot >= 0 ? owner.value[lot] : -1;
+        if (anchor >= 0) {
+          dragFrom.set(anchor);
+          grabX.set((lot % GRID_SIZE) - (anchor % GRID_SIZE));
+          grabY.set(Math.floor(lot / GRID_SIZE) - Math.floor(anchor / GRID_SIZE));
+          hoverX.set(anchor % GRID_SIZE);
+          hoverY.set(Math.floor(anchor / GRID_SIZE));
+          hoverState.set(1);
           dragX.set(lx);
           dragY.set(ly);
           lift.set(withSpring(1, { stiffness: 380, damping: 18 }));
-          scheduleOnRN(beginDrag, lot);
+          scheduleOnRN(beginDrag, anchor);
         } else {
           // Long press on bare lawn: behave like a normal camera drag.
           dragFrom.set(-1);
@@ -402,8 +512,18 @@ export const CityMap = memo(
         dragX.set(lx);
         dragY.set(ly);
         const lot = topCell(lx, ly);
-        if (lot !== hover.value) {
-          hover.set(lot);
+        if (lot < 0) {
+          if (hoverState.value !== 0) scheduleOnRN(haptic.tick);
+          hoverState.set(0);
+          return;
+        }
+        // The held lot follows the finger; the anchor keeps its offset from it.
+        const ax = (lot % GRID_SIZE) - grabX.value;
+        const ay = Math.floor(lot / GRID_SIZE) - grabY.value;
+        if (ax !== hoverX.value || ay !== hoverY.value || hoverState.value === 0) {
+          hoverX.set(ax);
+          hoverY.set(ay);
+          hoverState.set(judge(ax, ay));
           scheduleOnRN(haptic.tick);
         }
       },
@@ -411,7 +531,8 @@ export const CityMap = memo(
         'worklet';
         if (dragFrom.value < 0) return;
         const from = dragFrom.value;
-        const to = e.canceled ? -1 : hover.value;
+        const ok = !e.canceled && (hoverState.value === 1 || hoverState.value === 2);
+        const to = ok ? hoverY.value * GRID_SIZE + hoverX.value : -1;
         dragFrom.set(-1);
         lift.set(withSpring(0, { stiffness: 380, damping: 22 }));
         scheduleOnRN(endDrag, from, to);
@@ -445,17 +566,23 @@ export const CityMap = memo(
         onTileTap(lot < 0 ? -1 : lot % GRID_SIZE, lot < 0 ? -1 : Math.floor(lot / GRID_SIZE));
         return;
       }
-      const front = [...placed].sort((p, q) => q.x + q.y - (p.x + p.y));
-      for (const p of front) {
-        const [cx, cy] = project(p.x * TILE + TILE / 2, p.y * TILE + TILE / 2, 0);
-        const h = getItemArt(p.itemId).height;
-        if (Math.abs(lx - cx) <= TILE * C * 0.8 && ly <= cy + TILE / 2 && ly >= cy - TILE / 2 - h) {
+      // The ground point under the tap; lifting the tap by z moves it +z on both plan axes.
+      const X = (lx / C + 2 * ly) / 2;
+      const Y = (2 * ly - lx / C) / 2;
+      // Front to back over every piece: is the tap inside its box (footprint × art height)?
+      for (let i = objects.length - 1; i >= 0; i--) {
+        const p = objects[i];
+        if (isPathId(p.itemId)) continue;
+        const [dx, dy, w, d] = p.rect;
+        const x0 = (p.x + dx) * TILE;
+        const y0 = (p.y + dy) * TILE;
+        const lo = Math.max(0, x0 - X, y0 - Y);
+        const hi = Math.min(getItemArt(p.itemId).height, x0 + w * TILE - X, y0 + d * TILE - Y);
+        if (lo <= hi) {
           onTileTap(p.x, p.y);
           return;
         }
       }
-      const X = (lx / C + 2 * ly) / 2;
-      const Y = (2 * ly - lx / C) / 2;
       const gx = Math.floor(X / TILE);
       const gy = Math.floor(Y / TILE);
       const inside = gx >= 0 && gy >= 0 && gx < GRID_SIZE && gy < GRID_SIZE;
@@ -472,36 +599,55 @@ export const CityMap = memo(
           .flatMap((p) =>
             isPathId(p.itemId) ? [{ ...p, shapes: getPathShapes(p.itemId, pathMask(city, p.x, p.y)) }] : [],
           ),
-        objects: sorted
-          .filter((p) => !isPathId(p.itemId))
-          .map((p) => ({ ...p, shapes: getItemArt(p.itemId).shapes })),
+        // Big and L-shaped objects break the x + y order: sort their pieces.
+        objects: (() => {
+          const pieces = placed
+            .filter((p) => !isPathId(p.itemId))
+            .flatMap((p) => getItemArt(p.itemId).pieces.map((pc, i) => ({ ...p, piece: i, rect: pc.rect, shapes: pc.shapes })));
+          const order = depthOrder(
+            pieces.map((p) => ({ x: p.x + p.rect[0], y: p.y + p.rect[1], w: p.rect[2], d: p.rect[3] })),
+          );
+          return order.map((i) => pieces[i]);
+        })(),
       };
     }, [placed]);
-    const selPath = selected ? diamond(selected.x, selected.y) : null;
+    // The selection covers every lot of the object anchored there (or just the lot).
+    const selCells = useMemo((): Cell[] => {
+      if (!selected) return [];
+      const at = placed.find((p) => p.x === selected.x && p.y === selected.y);
+      return (at ? cellsOf(at.itemId) : [[0, 0] as Cell]).map(([dx, dy]) => [selected.x + dx, selected.y + dy] as Cell);
+    }, [selected, placed]);
+    const selPath = selCells.length > 0 ? selCells.map(([x, y]) => diamond(x, y)).join('') : null;
+    const selOutline = selCells.length > 0 ? outline(selCells) : null;
 
     // The lifted object follows the finger; the lot under it is outlined
     // green (free), blue (swap) or red (off the lawn).
     const liftTransform = useDerivedValue(() => [
       { translateX: dragX.value },
-      // Held a little above the finger, so the outlined target lot stays visible.
+      // Held a little above the finger, so the outlined target lots stay visible.
       { translateY: dragY.value - 0.6 * TOKEN * lift.value },
       { scale: 1 + 0.18 * lift.value },
-      { translateX: -TOKEN / 2 },
-      { translateY: -TOKEN / 2 },
+      // The held lot sits under the finger, wherever it is in the footprint.
+      { translateX: -(grabX.value + 0.5) * TILE * K },
+      { translateY: -(grabY.value + 0.5) * TILE * K },
     ]);
     const hoverTransform = useDerivedValue(() => {
-      const lot = Math.max(0, hover.value);
-      const [cx, cy] = toTop((lot % GRID_SIZE) * TILE + TILE / 2, Math.floor(lot / GRID_SIZE) * TILE + TILE / 2);
-      return [{ translateX: cx - (TILE * K) / 2 }, { translateY: cy - (TILE * K) / 2 }];
+      const [cx, cy] = toTop(hoverX.value * TILE, hoverY.value * TILE);
+      return [{ translateX: cx }, { translateY: cy }];
     });
     const hoverColor = useDerivedValue(() =>
-      hover.value < 0
-        ? colors.danger.DEFAULT
-        : hover.value !== dragFrom.value && occupied.value[hover.value] === 1
-          ? colors.sky.DEFAULT
-          : colors.primary.DEFAULT,
+      hoverState.value === 2 ? colors.sky.DEFAULT : hoverState.value === 1 ? colors.primary.DEFAULT : colors.danger.DEFAULT,
     );
-    const hoverOpacity = useDerivedValue(() => (hover.value < 0 ? 0 : 1));
+    const hoverOpacity = useDerivedValue(() => (hoverState.value === 0 ? 0 : 1));
+    // One square outline per target lot of the dragged object.
+    const hoverCells = useMemo(() => {
+      if (!dragItem) return null;
+      const L = TILE * K;
+      const path = Skia.PathBuilder.Make();
+      for (const [dx, dy] of cellsOf(dragItem)) path.addRRect(rrect(rect(dx * L + 0.15, dy * L + 0.15, L - 0.3, L - 0.3), 1.1, 1.1));
+      return path.detach();
+    }, [dragItem]);
+    const tokens = useMemo(() => objects.filter((p) => p.piece === 0), [objects]);
 
     return (
       <GestureDetector gesture={gesture}>
@@ -524,42 +670,42 @@ export const CityMap = memo(
                     <Path path={ground.a} color={GRASS_A} />
                     <Path path={ground.b} color={GRASS_B} />
                     {paths.map((p) => (
-                      <Building key={`${p.x}-${p.y}-${p.itemId}`} shapes={p.shapes} x={p.x} y={p.y} dragFrom={dragFrom} />
+                      <Building key={`${p.x}-${p.y}-${p.itemId}`} shapes={p.shapes} x={p.x} y={p.y} rect={UNIT_RECT} dragFrom={dragFrom} />
                     ))}
-                    {selPath && (
+                    {selPath && selOutline && (
                       <>
                         <Path path={selPath} color="#FFFFFF" opacity={pulse} />
-                        <Path path={selPath} style="stroke" strokeWidth={0.35} color="#FF8A3C" />
+                        <Path path={selOutline} style="stroke" strokeWidth={0.35} strokeCap="round" color="#FF8A3C" />
                       </>
                     )}
                   </Group>
 
                   <Group opacity={isoLayer}>
                     {objects.map((p) => (
-                      <Building key={`${p.x}-${p.y}-${p.itemId}`} shapes={p.shapes} x={p.x} y={p.y} dragFrom={dragFrom} />
+                      <Building
+                        key={`${p.x}-${p.y}-${p.itemId}-${p.piece}`}
+                        shapes={p.shapes}
+                        x={p.x}
+                        y={p.y}
+                        rect={p.rect}
+                        dragFrom={dragFrom}
+                      />
                     ))}
                   </Group>
 
                   <Group opacity={tokenLayer}>
-                    {objects.map((p) => (
+                    {tokens.map((p) => (
                       <Token key={`t${p.x}-${p.y}-${p.itemId}`} itemId={p.itemId} x={p.x} y={p.y} dragFrom={dragFrom} />
                     ))}
                   </Group>
 
                   {dragItem && (
                     <>
-                      <Group transform={hoverTransform} opacity={hoverOpacity}>
-                        <RoundedRect
-                          x={0.15}
-                          y={0.15}
-                          width={TILE * K - 0.3}
-                          height={TILE * K - 0.3}
-                          r={1.1}
-                          style="stroke"
-                          strokeWidth={0.45}
-                          color={hoverColor}
-                        />
-                      </Group>
+                      {hoverCells && (
+                        <Group transform={hoverTransform} opacity={hoverOpacity}>
+                          <Path path={hoverCells} style="stroke" strokeWidth={0.45} color={hoverColor} />
+                        </Group>
+                      )}
                       <Group transform={liftTransform}>
                         <TokenFace itemId={dragItem} />
                       </Group>

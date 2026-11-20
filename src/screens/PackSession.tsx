@@ -28,7 +28,7 @@ import { MAX_TILT_DEG } from '../components/effects/tilt';
 import { BoosterPack } from '../components/pack/BoosterPack';
 import { flapTopY, makePackGeometry } from '../components/pack/packGeometry';
 import { RARITY_COLOR, RARITY_LABEL } from '../data/rarity';
-import type { CardSet } from '../data/sets/cozyDowntown';
+import type { CardSet } from '../data/sets/types';
 import { PillButton } from '../components/ui/kit';
 import { haptic } from '../lib/haptics';
 import { rarityFlags, type PackCard } from '../logic/openPack';

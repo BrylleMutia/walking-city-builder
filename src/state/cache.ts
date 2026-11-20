@@ -1,7 +1,7 @@
 import { isAvatarId } from '../data/avatars';
 import { getItem } from '../data/items';
-import type { ItemId } from '../data/sets/cozyDowntown';
-import { EMPTY_HAUL, GRID_SIZE, initialData, type CityOp, type GameData, type Haul, type Owned, type Placed } from './gameLogic';
+import type { ItemId } from '../data/sets/types';
+import { EMPTY_HAUL, GRID_SIZE, fitCity, initialData, type CityOp, type GameData, type Haul, type Owned, type Placed } from './gameLogic';
 
 /**
  * The on-disk cache of the game store (zustand persist) and how old caches are
@@ -70,7 +70,6 @@ export function sanitizeCache(raw: unknown, today?: string): CachedData {
   if (Array.isArray(r.city)) {
     for (const p of r.city) {
       if (!isObj(p) || !isItem(p.itemId) || !onGrid(p.x, p.y)) continue;
-      if (city.some((c) => c.x === p.x && c.y === p.y)) continue;
       city.push({ itemId: p.itemId, x: p.x as number, y: p.y as number });
     }
   }
@@ -102,7 +101,10 @@ export function sanitizeCache(raw: unknown, today?: string): CachedData {
     goal: count(r.goal, d.goal),
     displayName: name(r.displayName, d.displayName),
     collection,
-    city,
+    // Every object must fit its footprint (a cache from before items covered
+    // several lots may overlap): later ones that don't go back to the inventory,
+    // like the server's `item_footprints` migration did.
+    city: fitCity(city),
     packsOpened: count(r.packsOpened, d.packsOpened),
     hapticsOn: bool(r.hapticsOn, true),
     forceLegendary: bool(r.forceLegendary, false),

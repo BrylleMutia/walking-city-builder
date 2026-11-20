@@ -10,13 +10,15 @@ appId: host.exp.exponent
     id: "inventory-.*"
     index: 0
     retryTapIfNoChange: false
-- assertVisible: "Tap an empty lot to build"
+# Big buildings add what they need ("needs 3×2") to the hint.
+- assertVisible: "Tap (an empty|a) lot to build.*"
 
 # Centre of the map is on the lawn.
 - tapOn:
     id: city-map
     retryTapIfNoChange: false
-- assertVisible: "1 of 256 lots built"
+# A building covers 1 to 6 lots, depending on what the pack gave.
+- assertVisible: "[1-6] of 256 lots built"
 - waitForAnimationToEnd
 - takeScreenshot: 04-city-placed
 
@@ -37,7 +39,8 @@ appId: host.exp.exponent
 - tapOn:
     id: city-map
     retryTapIfNoChange: false
-- assertVisible: "1 of 256 lots built"
+# A building covers 1 to 6 lots, depending on what the pack gave.
+- assertVisible: "[1-6] of 256 lots built"
 
 # Zoom controls
 - tapOn:

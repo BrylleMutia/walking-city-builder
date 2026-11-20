@@ -6,7 +6,7 @@ import {
   rarityTier,
   type Rarity,
 } from '../data/rarity';
-import type { CardSet, ItemDef } from '../data/sets/cozyDowntown';
+import type { CardSet, ItemDef } from '../data/sets/types';
 
 export interface PackCard {
   /** Unique within the pack; stable React key. */
