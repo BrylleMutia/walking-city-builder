@@ -14,7 +14,7 @@ import { Screen } from '../../components/ui/Screen';
 import { Tap } from '../../components/ui/Tap';
 import { toast } from '../../components/ui/toast';
 import { RARITY_COLOR } from '../../data/rarity';
-import { cozyDowntown } from '../../data/sets/cozyDowntown';
+import { PLAYABLE_SETS } from '../../data/sets';
 import { foilsOwned, recentDays, streak, uniqueOwned } from '../../state/gameLogic';
 import { useGameStore } from '../../state/useGameStore';
 import { colors } from '../../theme/tokens';
@@ -24,7 +24,7 @@ const CLOUD_LABEL = {
   connecting: 'Connecting…',
   online: 'Connected',
   offline: 'Offline',
-  signin_disabled: 'Sign-in disabled',
+  signin_disabled: 'Unavailable',
 } as const;
 const GRID_COLUMNS = 5;
 const GRID_GAP = 8;
@@ -69,17 +69,17 @@ export default function ProfileScreen() {
   const level = levelOf(s.lifetimeSteps);
   const levelPct = (s.lifetimeSteps % 10000) / 10000;
   const owned = uniqueOwned(s);
-  const total = cozyDowntown.items.length;
+  const total = PLAYABLE_SETS.reduce((n, set) => n + set.items.length, 0);
 
   const confirmReset = () =>
-    Alert.alert('Reset all data?', 'This clears your steps, Steps balance, cards and city. It cannot be undone.', [
+    Alert.alert('Reset all data?', 'This clears your steps, Wood, cards and city. It cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Reset',
         style: 'destructive',
         onPress: async () => {
           if (!(await s.reset())) {
-            toast.error("Couldn't reset", { description: 'Reset needs a connection to the game server.' });
+            toast.error('Couldn’t reset', { description: 'Reset needs a connection to the game server.' });
           }
         },
       },
@@ -171,33 +171,44 @@ export default function ProfileScreen() {
       <View className="mt-7">
         <SectionHeader title="Collection" action={`${owned}/${total} · ${foilsOwned(s)} foil`} />
       </View>
-      <Card className="p-3">
-        <View className="flex-row flex-wrap justify-center" style={{ gap: GRID_GAP }}>
-          {[...cozyDowntown.items].reverse().map((item) => {
-            const have = s.collection[item.id]?.count ?? 0;
-            return (
-              <View
-                key={item.id}
-                className="rounded-chip items-center justify-center"
-                style={{
-                  width: tile,
-                  height: tile,
-                  backgroundColor: have ? RARITY_COLOR[item.rarity].light + '88' : colors.line,
-                  opacity: have ? 1 : 0.5,
-                }}
-              >
-                {have ? (
-                  <Canvas style={{ width: tile, height: tile }}>
-                    <ItemArt id={item.id} x={4} y={4} width={tile - 8} height={tile - 8} />
-                  </Canvas>
-                ) : (
-                  <Feather name="help-circle" size={20} color={colors.muted} />
-                )}
-              </View>
-            );
-          })}
-        </View>
-      </Card>
+      {PLAYABLE_SETS.map((set, setIndex) => (
+        <Card key={set.id} className={`p-3 ${setIndex > 0 ? 'mt-3' : ''}`}>
+          {/* One grid per set, rarest first */}
+          <View className="flex-row items-center justify-between px-1 mb-2.5">
+            <AppText weight="strong" className="text-sm">
+              {set.name}
+            </AppText>
+            <AppText tone="muted" className="text-xs" testID={`collection-count-${set.id}`}>
+              {set.items.filter((i) => (s.collection[i.id]?.count ?? 0) > 0).length}/{set.items.length}
+            </AppText>
+          </View>
+          <View className="flex-row flex-wrap justify-center" style={{ gap: GRID_GAP }}>
+            {[...set.items].reverse().map((item) => {
+              const have = s.collection[item.id]?.count ?? 0;
+              return (
+                <View
+                  key={item.id}
+                  className="rounded-chip items-center justify-center"
+                  style={{
+                    width: tile,
+                    height: tile,
+                    backgroundColor: have ? RARITY_COLOR[item.rarity].light + '88' : colors.line,
+                    opacity: have ? 1 : 0.5,
+                  }}
+                >
+                  {have ? (
+                    <Canvas style={{ width: tile, height: tile }}>
+                      <ItemArt id={item.id} x={4} y={4} width={tile - 8} height={tile - 8} />
+                    </Canvas>
+                  ) : (
+                    <Feather name="help-circle" size={20} color={colors.muted} />
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        </Card>
+      ))}
 
       {/* settings */}
       <View className="mt-7">

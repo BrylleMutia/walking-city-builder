@@ -1,11 +1,11 @@
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
 import { SetupScreen } from '../components/onboarding/SetupScreen';
 import { AppText } from '../components/ui/AppText';
-import { PillButton, type FeatherName } from '../components/ui/kit';
+import { TextButton, type FeatherName } from '../components/ui/kit';
 import { Tap } from '../components/ui/Tap';
 import { useGameStore } from '../state/useGameStore';
 import { colors } from '../theme/tokens';
@@ -45,26 +45,18 @@ export default function SaveProgress() {
       body={
         accountEmail
           ? 'Your steps, cards and city are saved to your email. Sign in with it on any phone to pick up where you left off.'
-          : "You're playing as a guest: your progress is tied to this install. Save it to your email to keep it safe."
+          : 'You’re playing as a guest, so your progress lives only on this phone. Save it to your email to keep it safe.'
       }
       testID="save-progress"
       backIcon={fromProfile ? 'x' : 'arrow-left'}
-      footer={
-        <PillButton
-          label={fromProfile ? 'Close' : 'Skip for now'}
-          variant={fromProfile ? 'soft' : 'primary'}
-          onPress={finish}
-          testID="save-skip"
-        />
-      }
+      // A text button, so the only filled button on the screen is "Continue with email".
+      footer={<TextButton label={fromProfile ? 'Close' : 'Skip for now'} onPress={finish} testID="save-skip" />}
     >
-      <Benefit icon="shield" text="Your steps, cards and city tied to your email, not just this phone" />
-      <Benefit icon="mail" text="No password to remember: we email you a code" />
+      <Benefit icon="shield" text="Your steps, cards and city are saved to your email as well as this phone" />
+      <Benefit icon="mail" text="We email you a code, so there’s no password to remember" />
       <Benefit icon="smartphone" text="Sign in on another phone with the same email" />
 
-      <View className="mt-3" style={{ gap: 10 }}>
-        <Provider label="Continue with Apple" icon={<MaterialCommunityIcons name="apple" size={19} color={colors.muted} />} />
-        <Provider label="Continue with Google" icon={<MaterialCommunityIcons name="google" size={18} color={colors.muted} />} />
+      <View className="mt-3">
         {accountEmail ? (
           <SavedEmail email={accountEmail} />
         ) : (
@@ -94,6 +86,10 @@ export default function SaveProgress() {
           </Tap>
         </View>
       )}
+      {/* Not built yet: one quiet line instead of two disabled buttons above the real one. */}
+      <AppText tone="muted" className="text-xs text-center mt-4" testID="providers-soon">
+        Apple and Google sign-in are coming soon.
+      </AppText>
       {!fromProfile && (
         <AppText tone="muted" className="text-xs text-center mt-4 mb-2">
           You can save your progress anytime from Profile.
@@ -124,23 +120,6 @@ function SoonTag() {
       <AppText weight="strong" tone="soft" className="text-xs">
         Soon
       </AppText>
-    </View>
-  );
-}
-
-/** A sign-in option that isn't available yet: shown, but not tappable. */
-function Provider({ label, icon }: { label: string; icon: React.ReactNode }) {
-  return (
-    <View
-      className="h-12 rounded-tile border border-line flex-row items-center px-4"
-      accessibilityState={{ disabled: true }}
-      accessibilityLabel={`${label}, coming soon`}
-    >
-      {icon}
-      <AppText weight="semi" tone="muted" className="text-sm flex-1 ml-3">
-        {label}
-      </AppText>
-      <SoonTag />
     </View>
   );
 }

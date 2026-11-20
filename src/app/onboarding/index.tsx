@@ -21,8 +21,8 @@ import { Tap } from '../../components/ui/Tap';
 import { haptic } from '../../lib/haptics';
 
 const SLIDES: { scene: OnboardingScene; title: string; body: string }[] = [
-  { scene: 'walk', title: 'Walk', body: 'Every step you take\nearns Steps to spend' },
-  { scene: 'collect', title: 'Collect', body: 'Trade your Steps for\nbooster packs of buildings' },
+  { scene: 'walk', title: 'Walk', body: 'Every step you take\ncan turn up Wood' },
+  { scene: 'collect', title: 'Collect', body: 'Trade your Wood for\nbooster packs of buildings' },
   { scene: 'build', title: 'Build', body: 'Place every card in\nyour own little city' },
 ];
 const LAST = SLIDES.length - 1;
@@ -95,7 +95,7 @@ export default function OnboardingIntro() {
           style={startStyle}
           pointerEvents={onLast ? 'auto' : 'none'}
         >
-          <PillButton label="Get Started" onPress={next} testID="onboarding-start" style={{ minWidth: 200 }} />
+          <PillButton label="Get started" onPress={next} testID="onboarding-start" style={{ minWidth: 200 }} />
         </Animated.View>
       </View>
 

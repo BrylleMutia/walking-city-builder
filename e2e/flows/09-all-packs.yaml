@@ -1,0 +1,62 @@
+# Every set in the Shop can be bought and opened. 03-buy-and-open already
+# opened a Cozy Downtown pack; this one opens Neon Harbor and Blossom Gardens
+# (300 Wood each) and checks each set's collection on Profile got cards.
+appId: host.exp.exponent
+---
+- tapOn:
+    id: tab-shop
+- assertVisible: "3 sets"
+- takeScreenshot: 09-shop
+
+# Top up: 2 x 5,000 test steps roll ~1,000 Wood on the server.
+- tapOn:
+    id: tab-profile
+- scrollUntilVisible:
+    element:
+      id: add-5000
+    direction: DOWN
+- tapOn:
+    id: add-5000
+    retryTapIfNoChange: false
+- tapOn:
+    id: add-5000
+    retryTapIfNoChange: false
+- tapOn:
+    id: tab-index
+- extendedWaitUntil:
+    visible:
+      id: wood-balance
+      # 600+ (possibly with a thousands separator)
+      text: "([6-9][0-9][0-9]|[0-9],?[0-9][0-9][0-9])"
+    timeout: 15000
+
+- runFlow:
+    file: shared/buy-and-open-pack.yaml
+    env:
+      SET: neon-harbor
+- runFlow:
+    file: shared/buy-and-open-pack.yaml
+    env:
+      SET: blossom-gardens
+
+# Each pack's cards show up in that set's collection grid (at least 1 of 13
+# distinct items; more when the flow is re-run without a reset). Profile is
+# still scrolled down to Testing from the top-up, so the grids are above.
+- tapOn:
+    id: tab-profile
+- scrollUntilVisible:
+    element:
+      id: collection-count-blossom-gardens
+    direction: UP
+- assertVisible:
+    id: collection-count-blossom-gardens
+    text: "([1-9]|1[0-3])/13"
+- takeScreenshot: 09-collection
+# Neon Harbor's grid is the one above.
+- scrollUntilVisible:
+    element:
+      id: collection-count-neon-harbor
+    direction: UP
+- assertVisible:
+    id: collection-count-neon-harbor
+    text: "([1-9]|1[0-3])/13"

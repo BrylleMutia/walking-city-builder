@@ -12,16 +12,28 @@ import { ItemArt } from '../../components/items/ItemArt';
 import { AppText } from '../../components/ui/AppText';
 import { Card, Meta } from '../../components/ui/kit';
 import { Tap } from '../../components/ui/Tap';
+import { toast } from '../../components/ui/toast';
+import { ALL_ITEMS, cellsOf, footprintLabel } from '../../data/items';
 import { RARITY_COLOR, RARITY_LABEL } from '../../data/rarity';
-import { cozyDowntown, type ItemDef, type ItemId } from '../../data/sets/cozyDowntown';
+import type { ItemDef, ItemId } from '../../data/sets/types';
 import { haptic } from '../../lib/haptics';
-import { GRID_SIZE, available, tileAt } from '../../state/gameLogic';
+import { GRID_SIZE, available, objectAt, tileAt } from '../../state/gameLogic';
 import { useGameStore } from '../../state/useGameStore';
 import { cardShadow, colors } from '../../theme/tokens';
 
-const ITEMS: Record<ItemId, ItemDef> = Object.fromEntries(
-  cozyDowntown.items.map((i) => [i.id, i]),
-) as Record<ItemId, ItemDef>;
+const ITEMS: Record<ItemId, ItemDef> = Object.fromEntries(ALL_ITEMS.map((i) => [i.id, i])) as Record<ItemId, ItemDef>;
+const RARITY_RANK: Record<ItemDef['rarity'], number> = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4 };
+
+/** Says why a multi-lot building didn't go down (one toast, updated in place). */
+const noRoom = (itemId: ItemId) => {
+  const size = footprintLabel(itemId);
+  toast.warning('Doesn’t fit here', {
+    id: 'city-fit',
+    description: size
+      ? `${ITEMS[itemId].name} needs ${size} of free lawn from that lot.`
+      : 'That lot is taken.',
+  });
+};
 
 type Selection =
   | { kind: 'item'; itemId: ItemId }
@@ -36,20 +48,26 @@ export default function CityScreen() {
   // City and inventory only: step syncs and other store changes don't touch
   // this screen (the Skia map is its most expensive render).
   const state = useGameStore(useShallow((s) => ({ city: s.city, collection: s.collection })));
+  const displayName = useGameStore((s) => s.displayName);
   const removeAt = useGameStore((s) => s.removeAt);
   const [sel, setSel] = useState<Selection>(null);
   const [view, setView] = useState<'iso' | 'top'>('iso');
 
   const inventory = useMemo(
     () =>
-      // Paths first (what you place most), then buildings and props, rarest first.
-      [...cozyDowntown.items]
-        .reverse()
-        .sort((a, b) => Number(b.kind === 'path') - Number(a.kind === 'path'))
+      // Every set's items: paths first (what you place most), then buildings and props, rarest first.
+      [...ALL_ITEMS]
+        .sort(
+          (a, b) =>
+            Number(b.kind === 'path') - Number(a.kind === 'path') || RARITY_RANK[b.rarity] - RARITY_RANK[a.rarity],
+        )
         .filter((i) => (state.collection[i.id]?.count ?? 0) > 0)
         .map((i) => ({ item: i, free: available(state, i.id) })),
     [state],
   );
+
+  // Big buildings cover several lots each.
+  const lotsBuilt = useMemo(() => state.city.reduce((n, p) => n + cellsOf(p.itemId).length, 0), [state.city]);
 
   const selectedTile = sel?.kind === 'tile' || sel?.kind === 'moving' ? { x: sel.x, y: sel.y } : null;
   const tileBuilding = selectedTile ? tileAt(state, selectedTile.x, selectedTile.y) : undefined;
@@ -66,18 +84,22 @@ export default function CityScreen() {
           setSel({ kind: 'tile', x, y });
           return;
         }
+        // The tapped lot is where the moving object's anchor (its back corner) goes.
         if (s.moveItem(sel.x, sel.y, x, y)) {
           haptic.medium();
           setSel({ kind: 'tile', x, y });
         } else {
           haptic.warning();
+          const moving = tileAt(s, sel.x, sel.y);
+          if (moving) noRoom(moving.itemId);
         }
         return;
       }
-      const occupant = tileAt(s, x, y);
+      // Any lot of a building selects the whole building (stored at its anchor).
+      const occupant = objectAt(s, x, y);
       if (occupant) {
         haptic.tick();
-        setSel({ kind: 'tile', x, y });
+        setSel({ kind: 'tile', x: occupant.x, y: occupant.y });
         return;
       }
       if (sel?.kind === 'item') {
@@ -89,6 +111,7 @@ export default function CityScreen() {
           if (available(useGameStore.getState(), sel.itemId) <= 0) setSel(null);
         } else {
           haptic.warning();
+          if (available(s, sel.itemId) > 0) noRoom(sel.itemId);
         }
         return;
       }
@@ -99,8 +122,11 @@ export default function CityScreen() {
 
   /** Drag-and-drop in the top view (a taken lot swaps the two objects). */
   const onMove = useCallback((fx: number, fy: number, tx: number, ty: number) => {
-    if (!useGameStore.getState().moveItem(fx, fy, tx, ty)) {
+    const s = useGameStore.getState();
+    if (!s.moveItem(fx, fy, tx, ty)) {
       haptic.warning();
+      const moving = tileAt(s, fx, fy);
+      if (moving) noRoom(moving.itemId);
       return;
     }
     haptic.medium();
@@ -134,14 +160,14 @@ export default function CityScreen() {
         </View>
         <View className="flex-1 ml-3">
           <AppText tone="muted" className="text-xs">
-            My City
+            My city
           </AppText>
           <AppText weight="heavy" className="text-xl">
-            {cozyDowntown.name}
+            {`${displayName}'s Town`}
           </AppText>
           <Meta
             icon="grid"
-            label={`${state.city.length} of ${GRID_SIZE * GRID_SIZE} lots built`}
+            label={`${lotsBuilt} of ${GRID_SIZE * GRID_SIZE} lots built`}
           />
         </View>
       </View>
@@ -208,10 +234,12 @@ export default function CityScreen() {
           >
             <AppText weight="semi" className="text-xs">
               {sel?.kind === 'item'
-                ? 'Tap an empty lot to build'
+                ? footprintLabel(sel.itemId)
+                  ? `Tap a lot to build · needs ${footprintLabel(sel.itemId)}`
+                  : 'Tap an empty lot to build'
                 : sel?.kind === 'moving'
-                  ? 'Tap a lot to move it here, or a building to swap'
-                  : 'Hold and drag to move · drop on a building to swap'}
+                  ? 'Tap a lot to move its back corner there'
+                  : 'Hold and drag to move · same-size buildings swap'}
             </AppText>
           </Animated.View>
         )}
@@ -252,7 +280,7 @@ export default function CityScreen() {
                           testID="move-building"
                         />
                         <View className="w-2" />
-                        <Chip icon="corner-up-left" label="Return" onPress={removeSelected} testID="remove-building" />
+                        <Chip icon="corner-up-left" label="Put away" onPress={removeSelected} testID="remove-building" />
                       </>
                     ) : (
                       <Chip
@@ -312,6 +340,13 @@ export default function CityScreen() {
                     {free}
                   </AppText>
                 </View>
+                {footprintLabel(item.id) && (
+                  <View className="absolute bottom-1 left-1 rounded-full px-1.5 bg-ink">
+                    <AppText weight="heavy" tone="white" className="text-[9px]">
+                      {footprintLabel(item.id)}
+                    </AppText>
+                  </View>
+                )}
               </Tap>
             );
           })}

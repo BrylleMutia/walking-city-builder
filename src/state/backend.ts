@@ -10,7 +10,7 @@ export type BackendReason =
   | 'offline'
   | 'anonymous_disabled'
   | 'not_authenticated'
-  | 'insufficient_steps'
+  | 'insufficient_wood'
   | 'set_not_available'
   | 'none_available'
   | 'tile_occupied'
@@ -36,7 +36,7 @@ export class BackendError extends Error {
 }
 
 const KNOWN: BackendReason[] = [
-  'insufficient_steps',
+  'insufficient_wood',
   'set_not_available',
   'none_available',
   'tile_occupied',
@@ -173,7 +173,7 @@ export function fetchState(sinceDay?: string): Promise<ServerState> {
 }
 
 export function syncSteps(day: string, steps: number) {
-  return rpc<{ day: string; steps: number; credited: number; balance: number }>(
+  return rpc<{ day: string; steps: number; credited: number; wood: number; balance: number }>(
     supabase.rpc('sync_steps', { p_day: day, p_steps: Math.max(0, Math.floor(steps)) }),
   );
 }

@@ -6,7 +6,7 @@ import { tilesPerCard } from '../data/items';
 import { toast } from '../components/ui/toast';
 import { isAvatarId, type AvatarId } from '../data/avatars';
 import { getListing } from '../data/sets';
-import type { ItemId } from '../data/sets/cozyDowntown';
+import type { ItemId } from '../data/sets/types';
 import { setHapticsEnabled } from '../lib/haptics';
 import type { PackCard } from '../logic/openPack';
 import * as api from './backend';
@@ -70,6 +70,10 @@ interface GameStore extends G.GameData, Settings {
    * the tracker may start (and show the permission prompt) before `onboarded`.
    */
   stepTrackingRequested: boolean;
+  /** Persisted: steps and Wood credited since the "your walk paid off" popup last showed. */
+  haul: G.Haul;
+  /** Not persisted: the popup is up (set by an app open once the haul is big enough). */
+  showHaul: boolean;
 
   /** Signs in (anonymously), uploads steps walked offline, then loads the server state. */
   connect: () => Promise<void>;
@@ -107,6 +111,8 @@ interface GameStore extends G.GameData, Settings {
   reset: () => Promise<boolean>;
   /** Stops live updates while the app is in the background (connect() resumes them). */
   pauseLive: () => void;
+  /** Closes the popup and starts a new haul. */
+  dismissHaul: () => void;
 }
 
 const STEP_SYNC_DELAY = 1200;
@@ -225,7 +231,7 @@ export const useGameStore = create<GameStore>()(
         offlineNoticeShown = true;
         toast.info('Offline: city saved on this phone', {
           id: 'city-offline',
-          description: "Your changes will sync when you're back online.",
+          description: 'Your changes will sync when you’re back online.',
         });
       };
 
@@ -255,7 +261,7 @@ export const useGameStore = create<GameStore>()(
             set({ cloud: 'offline' });
             enqueue(op);
           } else {
-            toast.warning("Couldn't save that change", {
+            toast.warning('Couldn’t save that change', {
               id: 'city-rejected',
               description: 'Your city was reloaded from the server.',
             });
@@ -281,15 +287,18 @@ export const useGameStore = create<GameStore>()(
         }
       };
 
+      /** One day's total to the server; whatever it credits joins the haul. */
+      const syncDayTotal = async (day: string, steps: number) => {
+        const res = await api.syncSteps(day, steps);
+        set((cur) => ({ balance: res.balance, haul: G.addToHaul(cur.haul, res.credited, res.wood) }));
+      };
+
       const flushSteps = async () => {
         const s = get();
         if (s.cloud !== 'online') return;
         flushingSteps = true;
         try {
-          const res = await api.syncSteps(s.dateKey, s.stepsToday);
-          // Steps counted while the request was out aren't in this balance yet.
-          const since = Math.max(0, get().stepsToday - s.stepsToday);
-          set({ balance: res.balance + (get().dateKey === s.dateKey ? since : 0) });
+          await syncDayTotal(s.dateKey, s.stepsToday);
         } catch (e) {
           if (e instanceof BackendError && e.reason === 'offline') set({ cloud: 'offline' });
         } finally {
@@ -311,6 +320,8 @@ export const useGameStore = create<GameStore>()(
         profilePending: false,
         accountEmail: null,
         stepTrackingRequested: false,
+        haul: G.EMPTY_HAUL,
+        showHaul: false,
 
         connect: () => {
           connecting ??= (async () => {
@@ -323,7 +334,7 @@ export const useGameStore = create<GameStore>()(
               const s = get();
               const today = G.dayKey();
               const days = G.recentDays(s, new Date(), 8).filter((d) => d.steps > 0);
-              for (const d of days) await api.syncSteps(d.key, d.steps);
+              for (const d of days) await syncDayTotal(d.key, d.steps);
               // City changes made offline go up before we download, so the
               // server state we adopt already includes them.
               const queued = get().pendingCity.length;
@@ -334,6 +345,10 @@ export const useGameStore = create<GameStore>()(
                 ...G.applyCityOps(keepLocalProfile(cur, applyServerState(cur, server, today)), cur.pendingCity),
                 cloud: 'online',
               }));
+              // Every open (launch or back from the background) ends here: show
+              // what the walk earned once it's worth a popup.
+              // (Not during onboarding: the haul waits for the first open after it.)
+              if (get().onboarded && G.haulReady(get().haul)) set({ showHaul: true });
               // Name/goal picked while offline (or during the very first connect).
               if (get().profilePending) void pushProfile();
               offlineNoticeShown = false;
@@ -414,6 +429,8 @@ export const useGameStore = create<GameStore>()(
             pendingPack: null,
             pendingCity: [],
             profilePending: false,
+            haul: G.EMPTY_HAUL,
+            showHaul: false,
             accountEmail: saved,
             cloud: 'connecting',
           });
@@ -428,7 +445,7 @@ export const useGameStore = create<GameStore>()(
           if (!listing?.set) return { ok: false, reason: 'set_not_available' };
           if (get().cloud !== 'online') await get().connect();
           if (get().cloud !== 'online') return { ok: false, reason: 'offline' };
-          // Make sure the server has today's latest steps before it checks the balance.
+          // Today's latest steps first: their Wood may be what makes the pack affordable.
           if (stepSyncTimer) {
             clearTimeout(stepSyncTimer);
             stepSyncTimer = null;
@@ -461,7 +478,7 @@ export const useGameStore = create<GameStore>()(
           } catch (e) {
             const reason = e instanceof BackendError ? e.reason : 'unknown';
             if (reason === 'offline') set({ cloud: 'offline' });
-            if (reason === 'insufficient_steps') void refresh();
+            if (reason === 'insufficient_wood') void refresh();
             return { ok: false, reason };
           } finally {
             buying--;
@@ -503,6 +520,8 @@ export const useGameStore = create<GameStore>()(
           liveRefreshTimer = null;
         },
 
+        dismissHaul: () => set({ haul: G.EMPTY_HAUL, showHaul: false }),
+
         reset: async () => {
           if (get().cloud !== 'online') return false;
           try {
@@ -516,6 +535,8 @@ export const useGameStore = create<GameStore>()(
               pendingPack: null,
               pendingCity: [],
               profilePending: false,
+              haul: G.EMPTY_HAUL,
+              showHaul: false,
             }));
             await refresh();
             return true;

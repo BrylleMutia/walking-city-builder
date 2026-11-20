@@ -14,6 +14,7 @@ import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { Toaster } from '../components/ui/Toaster';
+import { WoodHaulModal } from '../components/wood/WoodHaulModal';
 import { useGameStore } from '../state/useGameStore';
 import { useCloudSync } from '../state/useCloudSync';
 import { useStepTracker } from '../state/useStepTracker';
@@ -79,6 +80,8 @@ export default function RootLayout() {
         {/* Returning players: from the intro slides, a taken email, or Profile. */}
         <Stack.Screen name="account/sign-in" options={{ contentStyle: { backgroundColor: colors.card } }} />
       </Stack>
+      {/* "Your walk paid off": raised by an app open (useCloudSync → connect). */}
+      {onboarded && <WoodHaulModal />}
       {/* Global toasts, above every screen of the stack. */}
       <Toaster />
     </GestureHandlerRootView>

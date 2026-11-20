@@ -1,7 +1,7 @@
 import { DEFAULT_AVATAR, isAvatarId } from '../data/avatars';
 import { getItem } from '../data/items';
 import type { Rarity } from '../data/rarity';
-import type { ItemId } from '../data/sets/cozyDowntown';
+import type { ItemId } from '../data/sets/types';
 import type { PackCard } from '../logic/openPack';
 import type { GameData, Owned, Placed } from './gameLogic';
 
@@ -42,8 +42,9 @@ export function applyServerState<T extends GameData>(
   today: string,
   /**
    * True while today's local steps are still on their way to the server: steps
-   * counted beyond the server's total for today are kept (and their Steps
-   * credited locally), so a refresh mid-walk doesn't make the counter jump back.
+   * counted beyond the server's total for today are kept, so a refresh mid-walk
+   * doesn't make the counter jump back. (Their Wood isn't known until the server
+   * rolls it, so the balance is always the server's.)
    */
   keepUnsyncedSteps = false,
 ): T {
@@ -73,7 +74,7 @@ export function applyServerState<T extends GameData>(
     city,
     ...(p
       ? {
-          balance: p.balance + unsynced,
+          balance: p.balance,
           goal: p.step_goal,
           displayName: p.display_name,
           avatarId: isAvatarId(p.avatar_id) ? p.avatar_id : DEFAULT_AVATAR,

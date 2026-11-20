@@ -73,7 +73,7 @@ appId: host.exp.exponent
     id: pack-done
     retryTapIfNoChange: false
 
-- assertVisible: "My City"
+- assertVisible: "My city"
 - waitForAnimationToEnd
 - takeScreenshot: 09-city
 

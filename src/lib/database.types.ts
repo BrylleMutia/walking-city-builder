@@ -39,9 +39,9 @@ export type Database = {
         ]
       }
       game_config: {
-        Row: { cards_per_pack: number; foil_chance: number; grid_size: number; id: boolean; max_daily_steps: number; starting_balance: number }
-        Insert: { cards_per_pack?: number; foil_chance?: number; grid_size?: number; id?: boolean; max_daily_steps?: number; starting_balance?: number }
-        Update: { cards_per_pack?: number; foil_chance?: number; grid_size?: number; id?: boolean; max_daily_steps?: number; starting_balance?: number }
+        Row: { cards_per_pack: number; foil_chance: number; grid_size: number; id: boolean; max_daily_steps: number; starting_balance: number; wood_drop_chance: number }
+        Insert: { cards_per_pack?: number; foil_chance?: number; grid_size?: number; id?: boolean; max_daily_steps?: number; starting_balance?: number; wood_drop_chance?: number }
+        Update: { cards_per_pack?: number; foil_chance?: number; grid_size?: number; id?: boolean; max_daily_steps?: number; starting_balance?: number; wood_drop_chance?: number }
         Relationships: []
       }
       inventory: {
@@ -54,9 +54,9 @@ export type Database = {
         ]
       }
       items: {
-        Row: { id: string; kind: string; name: string; rarity: string; set_id: string; tiles_per_card: number; walkable: boolean }
-        Insert: { id: string; kind: string; name: string; rarity: string; set_id: string; tiles_per_card?: number; walkable?: boolean }
-        Update: { id?: string; kind?: string; name?: string; rarity?: string; set_id?: string; tiles_per_card?: number; walkable?: boolean }
+        Row: { cells: Json; id: string; kind: string; name: string; rarity: string; set_id: string; tiles_per_card: number; walkable: boolean }
+        Insert: { cells?: Json; id: string; kind: string; name: string; rarity: string; set_id: string; tiles_per_card?: number; walkable?: boolean }
+        Update: { cells?: Json; id?: string; kind?: string; name?: string; rarity?: string; set_id?: string; tiles_per_card?: number; walkable?: boolean }
         Relationships: [
           { foreignKeyName: "items_rarity_fkey"; columns: ["rarity"]; isOneToOne: false; referencedRelation: "rarities"; referencedColumns: ["id"] },
           { foreignKeyName: "items_set_id_fkey"; columns: ["set_id"]; isOneToOne: false; referencedRelation: "card_sets"; referencedColumns: ["id"] },

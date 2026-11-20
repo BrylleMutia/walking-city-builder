@@ -19,7 +19,7 @@ env:
       # Expo Go's developer menu covering either.
       # (Not the project name: Expo Go's home screen lists it too.)
       - extendedWaitUntil:
-          visible: "Welcome back.*|SKIP|Toggle performance monitor"
+          visible: "Let.s do this|SKIP|Toggle performance monitor"
           timeout: 60000
 
 # Expo Go opens its developer menu on first launch; close it if it's there.
@@ -35,8 +35,37 @@ env:
       visible:
         id: onboarding-skip
     file: finish-onboarding.yaml
+# The app's tabs, or the Wood popup: while a Modal is up, the screen under it
+# is hidden from the accessibility tree, so the tabs can't be seen then.
 - extendedWaitUntil:
     visible:
-      id: tab-index
+      id: "tab-index|wood-haul-close"
     timeout: 30000
 - waitForAnimationToEnd
+
+# Every open shows the Wood popup once 500+ steps synced since it last showed
+# (e.g. left over from an earlier run): close it so it can't cover the tabs.
+# It appears once the app has synced, which can be a moment after the tabs.
+# A caller can pass env KEEP_HAUL: "true" to check the popup itself. (No default
+# in this file's env block: that would override the caller's value.)
+- runFlow:
+    when:
+      true: ${typeof KEEP_HAUL === "undefined" || KEEP_HAUL != "true"}
+    commands:
+      - extendedWaitUntil:
+          visible:
+            id: wood-haul-close
+          timeout: 4000
+          optional: true
+      - runFlow:
+          when:
+            visible:
+              id: wood-haul-close
+          commands:
+            - tapOn:
+                id: wood-haul-close
+            - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible:
+            id: tab-index
+          timeout: 10000

@@ -29,10 +29,10 @@ appId: host.exp.exponent
     id: gallery-toast-stack
     retryTapIfNoChange: false
     waitToSettleTimeoutMs: 400
-- assertVisible: "Couldn't buy pack"
+- assertVisible: "Couldn.t buy pack"
 - takeScreenshot: 06-toast-stack
 - tapOn:
-    text: "Couldn't buy pack"
+    text: "Couldn.t buy pack"
     retryTapIfNoChange: false
     waitToSettleTimeoutMs: 400
 - assertVisible: "Cozy Bakery placed"

@@ -35,7 +35,7 @@ function MagicLinkVariant() {
     <SetupScreen
       scene="email"
       title="Save with your email"
-      body="We'll send you a link. Tap it and your city is saved. No password to remember."
+      body="We’ll send you a link. Tap it and your city is saved. No password to remember."
       testID="signup-mockup-link"
       footer={
         <View>
@@ -108,7 +108,7 @@ function CodeVariant() {
       scene="code"
       eyebrow={<StepDots step={2} of={2} />}
       title="Check your inbox"
-      body={`We sent a 6-digit code to ${DEMO_EMAIL}. It's valid for 10 minutes.`}
+      body={`We sent a 6-digit code to ${DEMO_EMAIL}. It’s valid for 10 minutes.`}
       testID="signup-mockup-code"
       footer={<PillButton label="Verify & save" icon="check" onPress={mockOnly} disabled={!complete} />}
     >

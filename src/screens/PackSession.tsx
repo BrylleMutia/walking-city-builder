@@ -28,7 +28,7 @@ import { MAX_TILT_DEG } from '../components/effects/tilt';
 import { BoosterPack } from '../components/pack/BoosterPack';
 import { flapTopY, makePackGeometry } from '../components/pack/packGeometry';
 import { RARITY_COLOR, RARITY_LABEL } from '../data/rarity';
-import type { CardSet } from '../data/sets/cozyDowntown';
+import type { CardSet } from '../data/sets/types';
 import { PillButton } from '../components/ui/kit';
 import { haptic } from '../lib/haptics';
 import { rarityFlags, type PackCard } from '../logic/openPack';
@@ -46,7 +46,8 @@ interface Props {
   onDone: () => void;
   /** Omitted when the player can't afford another pack. */
   onOpenAnother?: () => void;
-  anotherLabel?: string;
+  /** Wood cost of another pack, shown on its button. */
+  anotherPrice?: number;
 }
 
 type Phase = 'sealed' | 'opened' | 'reveal' | 'done';
@@ -116,7 +117,7 @@ export const PackSession = memo(function PackSession({
   topInset = 0,
   onDone,
   onOpenAnother,
-  anotherLabel = 'Open another',
+  anotherPrice,
 }: Props) {
   const { geo, packTop, stack } = useLayout(width, height, cards.length);
   const [phase, setPhase] = useState<Phase>('sealed');
@@ -360,15 +361,17 @@ export const PackSession = memo(function PackSession({
         {phase === 'done' && (
           <View style={styles.actions}>
             {onOpenAnother && (
+              // Secondary on purpose: placing the pulls is the main next step, spending again is optional.
               <PillButton
-                label={anotherLabel}
-                variant="accent"
+                label="Open another"
+                variant="outline"
+                price={anotherPrice}
                 icon="refresh-cw"
                 onPress={onOpenAnother}
                 testID="open-another"
               />
             )}
-            <PillButton label="Add to my city" icon="check" onPress={onDone} testID="pack-done" />
+            <PillButton label="Go to my city" icon="check" onPress={onDone} testID="pack-done" />
           </View>
         )}
       </View>

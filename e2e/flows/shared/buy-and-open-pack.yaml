@@ -1,0 +1,82 @@
+# Buys one pack of ${SET} from the Shop and opens it all the way: tear, take the
+# cards out, flick through all five, summary, done. Needs enough Wood.
+appId: host.exp.exponent
+---
+- tapOn:
+    id: tab-shop
+# The Booster packs row scrolls sideways (its cards sit at ~46-70% of the
+# height): swipe it left until the set's card shows.
+- repeat:
+    while:
+      notVisible:
+        id: set-card-${SET}
+    times: 3
+    commands:
+      - swipe:
+          start: 85%, 57%
+          end: 20%, 57%
+          duration: 400
+- swipe:
+    start: 85%, 57%
+    end: 20%, 57%
+    duration: 400
+- tapOn:
+    id: set-card-${SET}
+- assertVisible: "About this set"
+- takeScreenshot: 09-${SET}-detail
+- tapOn:
+    id: buy-pack
+    retryTapIfNoChange: false
+
+# Sealed pack: same layout for every set (see 03-buy-and-open).
+- extendedWaitUntil:
+    visible: ".*across the top edge.*"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: 09-${SET}-sealed
+- swipe:
+    start: 20%, 29%
+    end: 82%, 29%
+    duration: 900
+- extendedWaitUntil:
+    visible: ".*Tap the pack.*"
+    timeout: 5000
+- tapOn:
+    id: booster-pack
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: "Card 1 of 5.*"
+    timeout: 5000
+- waitForAnimationToEnd
+- takeScreenshot: 09-${SET}-card-1
+- tapOn:
+    point: 50%, 50%
+    retryTapIfNoChange: false
+- assertVisible: "Card 2 of 5.*"
+- tapOn:
+    point: 50%, 50%
+    retryTapIfNoChange: false
+- assertVisible: "Card 3 of 5.*"
+- tapOn:
+    point: 50%, 50%
+    retryTapIfNoChange: false
+- assertVisible: "Card 4 of 5.*"
+- tapOn:
+    point: 50%, 50%
+    retryTapIfNoChange: false
+- assertVisible: "Card 5 of 5.*"
+- waitForAnimationToEnd
+- takeScreenshot: 09-${SET}-card-5
+- tapOn:
+    point: 50%, 50%
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible:
+      id: pack-done
+    timeout: 5000
+- waitForAnimationToEnd
+- takeScreenshot: 09-${SET}-summary
+- tapOn:
+    id: pack-done
+    retryTapIfNoChange: false
+- assertVisible: "My city"

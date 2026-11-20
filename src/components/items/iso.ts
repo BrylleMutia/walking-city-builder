@@ -252,3 +252,51 @@ export function spot(
 
 /** The 4×4 base slab every item sits on. */
 export const ground = (color: string): Shape[] => box(0, 0, -0.35, 4, 4, 0.35, color);
+
+/**
+ * A ring standing upright in the plane x = const (seen from screen-right), centred
+ * on (cy, cz): an outer circle with the inner one cut out (opposite winding), so
+ * what's behind shows through. `thickness` 0 or ≥ r gives a filled disc.
+ */
+export function uprightRing(
+  x: number,
+  cy: number,
+  cz: number,
+  r: number,
+  thickness: number,
+  color: string,
+  segments = 40,
+): Shape[] {
+  const circle = (radius: number, reverse: boolean) => {
+    const pts: string[] = [];
+    for (let i = 0; i < segments; i++) {
+      const t = ((reverse ? segments - i : i) / segments) * Math.PI * 2;
+      const [sx, sy] = project(x, cy + radius * Math.cos(t), cz + radius * Math.sin(t));
+      pts.push(`${i === 0 ? 'M' : 'L'}${n(sx)} ${n(sy)}`);
+    }
+    return pts.join(' ') + ' Z';
+  };
+  const inner = r - thickness;
+  return [{ d: inner > 0 && thickness > 0 ? `${circle(r, false)} ${circle(inner, true)}` : circle(r, false), color }];
+}
+
+/** A thin straight bar in the plane x = const, from (y0, z0) to (y1, z1). */
+export function barR(x: number, y0: number, z0: number, y1: number, z1: number, width: number, color: string): Shape[] {
+  const len = Math.hypot(y1 - y0, z1 - z0) || 1;
+  // offset perpendicular to the bar, within the plane
+  const oy = (-(z1 - z0) / len) * (width / 2);
+  const oz = ((y1 - y0) / len) * (width / 2);
+  return flat(
+    [
+      [x, y0 + oy, z0 + oz],
+      [x, y1 + oy, z1 + oz],
+      [x, y1 - oy, z1 - oz],
+      [x, y0 - oy, z0 - oz],
+    ],
+    color,
+  );
+}
+
+/** Base slab under a multi-lot item (or one rectangular piece of it), in tile units. */
+export const slab = (x: number, y: number, w: number, d: number, color: string): Shape[] =>
+  box(x, y, -0.35, w, d, 0.35, color);

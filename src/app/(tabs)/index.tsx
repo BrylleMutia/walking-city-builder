@@ -10,11 +10,10 @@ import { Avatar, HERO_ASPECT, HomeHeroArt } from '../../components/ui/illustrati
 import {
   ArrowButton,
   Card,
-  IconButton,
   Meta,
   SectionHeader,
   StatTile,
-  StepsPill,
+  WoodPill,
   formatNumber,
 } from '../../components/ui/kit';
 import { ProgressRing } from '../../components/ui/ProgressRing';
@@ -75,13 +74,12 @@ export default function HomeScreen() {
         </View>
         <View className="flex-1 ml-3">
           <AppText tone="muted" className="text-sm">
-            Welcome back 👋
+            Let’s do this
           </AppText>
           <AppText weight="heavy" className="text-xl" numberOfLines={1} testID="home-name">
             {s.displayName}
           </AppText>
         </View>
-        <IconButton icon="bell" dot accessibilityLabel="Notifications" />
       </View>
 
       {/* hero */}
@@ -145,7 +143,7 @@ export default function HomeScreen() {
 
       {/* activities */}
       <View className="mt-7">
-        <SectionHeader title="Activities" action="View All" onAction={() => router.navigate('/profile')} />
+        <SectionHeader title="Your activity" action="See stats" onAction={() => router.navigate('/profile')} />
       </View>
       <ScrollView
         horizontal
@@ -155,13 +153,13 @@ export default function HomeScreen() {
       >
         <ActivityCard
           title="Wallet"
-          meta={`${formatNumber(s.balance)} Steps`}
+          meta={`${formatNumber(s.balance)} Wood`}
           metaIcon="credit-card"
           badge={s.balance >= cheapest ? 'Buy pack' : undefined}
           bg="bg-accent-soft"
           onPress={() => router.navigate('/shop')}
         >
-          <StepsPill balance={s.balance} compact />
+          <WoodPill balance={s.balance} compact />
         </ActivityCard>
 
         <ActivityCard

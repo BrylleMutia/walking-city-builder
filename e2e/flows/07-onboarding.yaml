@@ -1,6 +1,6 @@
 # First-run onboarding, replayed from Profile -> Testing: intro slides, name,
 # step counting (unavailable on the emulator, so a test walk), goal, and the
-# save-progress step (Apple/Google still "Soon").
+# save-progress step (Apple/Google still coming soon).
 appId: host.exp.exponent
 ---
 - runFlow: shared/open-app.yaml
@@ -84,9 +84,13 @@ appId: host.exp.exponent
 - tapOn:
     id: goal-continue
 
-# Save progress: Apple/Google are "Soon"; skip it.
+# Save progress: email is the only filled button, Apple/Google are one
+# "coming soon" line, and Skip is a text button.
 - assertVisible: "Keep your city safe"
-- assertVisible: "Continue with Google, coming soon"
+- assertVisible:
+    id: continue-with-email
+- assertVisible:
+    id: providers-soon
 - takeScreenshot: 07-save-progress
 - tapOn:
     id: save-skip
@@ -94,7 +98,7 @@ appId: host.exp.exponent
 
 # Back in the game with the new goal.
 - extendedWaitUntil:
-    visible: "Welcome back.*"
+    visible: "Let.s do this"
     timeout: 10000
 - assertVisible:
     id: home-name

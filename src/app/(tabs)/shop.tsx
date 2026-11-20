@@ -4,10 +4,10 @@ import { ScrollView, View, useWindowDimensions } from 'react-native';
 
 import { AppText } from '../../components/ui/AppText';
 import { PackThumb } from '../../components/ui/illustrations';
-import { ArrowButton, Card, Meta, SectionHeader, StepsPill, formatNumber } from '../../components/ui/kit';
+import { ArrowButton, Card, Meta, SectionHeader, WoodPill, formatNumber } from '../../components/ui/kit';
 import { Screen } from '../../components/ui/Screen';
 import { Tap } from '../../components/ui/Tap';
-import { SET_LISTINGS, type SetListing } from '../../data/sets';
+import { SET_LISTINGS, setCountLabel, setSummary, type SetListing } from '../../data/sets';
 import { useGameStore } from '../../state/useGameStore';
 import { cardShadow } from '../../theme/tokens';
 
@@ -22,13 +22,13 @@ export default function ShopScreen() {
       <View className="flex-row items-center justify-between">
         <View>
           <AppText tone="muted" className="text-sm">
-            Spend your steps
+            Spend your Wood
           </AppText>
           <AppText weight="heavy" className="text-2xl">
-            Pack Shop
+            Pack shop
           </AppText>
         </View>
-        <StepsPill balance={balance} />
+        <WoodPill balance={balance} />
       </View>
 
       {/* featured banner, like "Explore The Beauty" */}
@@ -50,7 +50,7 @@ export default function ShopScreen() {
               {featured.name} is out now
             </AppText>
             <AppText tone="muted" className="text-xs mt-0.5">
-              10 buildings · 5 cards a pack · 2% legendary
+              {featured.set ? setSummary(featured.set) : featured.tagline}
             </AppText>
           </View>
           <ArrowButton onPress={() => router.push(`/set/${featured.id}`)} />
@@ -58,7 +58,7 @@ export default function ShopScreen() {
       </View>
 
       <View className="mt-7">
-        <SectionHeader title="Booster Packs" action={`${SET_LISTINGS.length} sets`} />
+        <SectionHeader title="Booster packs" action={setCountLabel()} />
       </View>
       <ScrollView
         horizontal
@@ -76,8 +76,8 @@ export default function ShopScreen() {
           How it works
         </AppText>
         <AppText tone="muted" className="text-xs mt-1 leading-5">
-          Every step you walk adds one Step to your wallet. Trade them for booster packs, then
-          place what you pull in your city.
+          Each step you walk has a 1 in 10 chance to turn up 1 Wood. Spend Wood on booster packs,
+          then place what you pull in your city.
         </AppText>
       </Card>
     </Screen>

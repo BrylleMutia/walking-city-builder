@@ -17,7 +17,7 @@
         "android.permission.health.READ_STEPS"
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#C9F2E3",
+        "backgroundColor": "#BCE9D8",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -30,7 +30,15 @@
     "plugins": [
       "expo-router",
       "expo-font",
-      "expo-splash-screen",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#C9F2E3"
+        }
+      ],
       [
         "expo-build-properties",
         {

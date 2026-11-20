@@ -46,7 +46,8 @@ describe('applyServerState', () => {
     const local = { ...initialData('2026-11-17'), stepsToday: 1000 };
     const kept = applyServerState(local, server, '2026-11-17', true);
     expect(kept.stepsToday).toBe(1000);
-    expect(kept.balance).toBe(1234 + 200);
+    // Their Wood isn't rolled yet: the balance is the server's.
+    expect(kept.balance).toBe(1234);
     expect(kept.lifetimeSteps).toBe(5678 + 200);
     // Server ahead (another device walked more today): the server wins.
     const behind = applyServerState({ ...local, stepsToday: 500 }, server, '2026-11-17', true);

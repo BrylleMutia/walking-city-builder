@@ -1,4 +1,4 @@
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import React from 'react';
 import { View, type ViewProps } from 'react-native';
 
@@ -6,6 +6,7 @@ import { cardShadow, colors } from '../../theme/tokens';
 import { AnimatedCounter } from './AnimatedCounter';
 import { AppText } from './AppText';
 import { Tap } from './Tap';
+import { WoodIcon } from './WoodIcon';
 
 export type FeatherName = React.ComponentProps<typeof Feather>['name'];
 
@@ -50,13 +51,17 @@ export function IconButton({
   );
 }
 
-/** The big green call-to-action ("Book Now" in the reference). */
+/**
+ * The big call-to-action ("Book Now" in the reference). One `primary` per
+ * screen; a second action next to it uses `outline` so the two never compete.
+ */
 export function PillButton({
   label,
   onPress,
   disabled,
   variant = 'primary',
   icon,
+  price,
   style,
   testID,
 }: {
@@ -64,8 +69,10 @@ export function PillButton({
   label: string;
   onPress?: () => void;
   disabled?: boolean;
-  variant?: 'primary' | 'accent' | 'soft';
+  variant?: 'primary' | 'accent' | 'soft' | 'outline';
   icon?: FeatherName;
+  /** Wood cost shown after the label ("Buy pack · 🪵 200"), so the price is visible at the tap. */
+  price?: number;
   style?: ViewProps['style'];
 }) {
   const bg = disabled
@@ -74,9 +81,12 @@ export function PillButton({
       ? 'bg-accent'
       : variant === 'soft'
         ? 'bg-primary-soft'
-        : 'bg-primary';
-  const tone = disabled ? 'muted' : variant === 'soft' ? 'primary' : 'white';
-  const iconColor = disabled ? colors.muted : variant === 'soft' ? colors.primary.dark : '#FFFFFF';
+        : variant === 'outline'
+          ? 'bg-card border-2 border-primary'
+          : 'bg-primary';
+  const light = variant === 'soft' || variant === 'outline';
+  const tone = disabled ? 'muted' : light ? 'primary' : 'white';
+  const iconColor = disabled ? colors.muted : light ? colors.primary.dark : '#FFFFFF';
   return (
     <Tap
       onPress={onPress}
@@ -84,10 +94,35 @@ export function PillButton({
       haptics="medium"
       style={style}
       testID={testID}
+      accessibilityLabel={price === undefined ? undefined : `${label}, ${formatNumber(price)} Wood`}
       className={`h-14 px-6 rounded-tile flex-row items-center justify-center ${bg}`}
     >
       {icon && <Feather name={icon} size={18} color={iconColor} style={{ marginRight: 8 }} />}
       <AppText weight="strong" tone={tone} className="text-base">
+        {label}
+      </AppText>
+      {price !== undefined && (
+        <>
+          <AppText weight="strong" tone={tone} className="text-base mx-2">
+            ·
+          </AppText>
+          <View className="w-6 h-6 rounded-full bg-accent-soft items-center justify-center mr-1.5">
+            <WoodIcon size={20} />
+          </View>
+          <AppText weight="strong" tone={tone} className="text-base">
+            {formatNumber(price)}
+          </AppText>
+        </>
+      )}
+    </Tap>
+  );
+}
+
+/** A low-emphasis action under a screen's main button ("Skip for now"). Same height as PillButton. */
+export function TextButton({ label, onPress, testID }: { label: string; onPress?: () => void; testID?: string }) {
+  return (
+    <Tap onPress={onPress} haptics="tick" testID={testID} className="h-14 items-center justify-center">
+      <AppText weight="strong" tone="soft" className="text-base">
         {label}
       </AppText>
     </Tap>
@@ -176,7 +211,7 @@ export function SectionHeader({
 }
 
 /** The orange price badge that overlaps card corners. */
-export function PriceTag({ label, sub }: { label: string; sub?: string }) {
+export function PriceTag({ label, sub, wood }: { label: string; sub?: string; wood?: boolean }) {
   return (
     <View className="items-center">
       <View
@@ -194,9 +229,13 @@ export function PriceTag({ label, sub }: { label: string; sub?: string }) {
         </AppText>
       </View>
       {sub && (
-        <AppText tone="muted" className="text-xs mt-1">
-          {sub}
-        </AppText>
+        <View className="flex-row items-center mt-1">
+          {/* `wood` marks the price as Wood, the same coin as the balance pill. */}
+          {wood && <WoodIcon size={14} style={{ marginRight: 3 }} />}
+          <AppText tone="muted" className="text-xs">
+            {sub}
+          </AppText>
+        </View>
       )}
     </View>
   );
@@ -214,18 +253,18 @@ export function Meta({ icon, label, color }: { icon: FeatherName; label: string;
   );
 }
 
-/** Spendable Steps balance. */
-export function StepsPill({ balance, compact }: { balance: number; compact?: boolean }) {
+/** Spendable Wood balance. */
+export function WoodPill({ balance, compact }: { balance: number; compact?: boolean }) {
   return (
     <View
       className={`flex-row items-center bg-card rounded-full ${compact ? 'px-3 py-1.5' : 'px-4 py-2'}`}
       style={cardShadow}
     >
       <View className="w-6 h-6 rounded-full bg-accent-soft items-center justify-center mr-1.5">
-        <MaterialCommunityIcons name="shoe-print" size={14} color={colors.accent.DEFAULT} />
+        <WoodIcon size={20} />
       </View>
-      {/* Rolls on every change, so spending and earning Steps are felt, not just shown. */}
-      <AnimatedCounter value={balance} size={compact ? 14 : 16} testID="steps-balance" />
+      {/* Rolls on every change, so spending and earning Wood are felt, not just shown. */}
+      <AnimatedCounter value={balance} size={compact ? 14 : 16} testID="wood-balance" />
     </View>
   );
 }

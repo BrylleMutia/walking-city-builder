@@ -11,5 +11,11 @@ appId: host.exp.exponent
 - assertVisible:
     id: steps-today
     text: "500"
-- assertVisible: "3,500"
+# Wood is rolled by the server (10% per step) once the steps sync: 400 to start
+# plus ~50 for 500 steps (2 to 98 is practically certain).
+- extendedWaitUntil:
+    visible:
+      id: wood-balance
+      text: "4[0-9][0-9]"
+    timeout: 10000
 - takeScreenshot: 02-after-walk
