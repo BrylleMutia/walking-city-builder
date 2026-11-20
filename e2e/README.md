@@ -36,9 +36,10 @@ The flows run in the order set in `config.yaml` and build on each other's state.
 | `04-city-place` | Place a building, select it, return it to the inventory, place it again, zoom |
 | `05-persistence` | Kill and relaunch: steps, balance and city survive |
 | `06-components` | UI gallery (Profile → Testing): counter, toast stack, bell, delete, password |
-| `07-onboarding` | Replay onboarding (Profile → Testing): swipe 3 slides → Get Started → name "Bry" (Home greets Bry) → count steps (unavailable on the emulator → test walk) → pick 10k → Skip for now → goal is 10,000 → rename back to Walker from Profile |
+| `07-onboarding` | Replay onboarding (Profile → Testing): swipe 3 slides → Get started → name "Bry" (Home greets Bry) → count steps (unavailable on the emulator → test walk) → pick 10k → Skip for now → goal is 10,000 → rename back to Walker from Profile |
+| `09-all-packs` | Shop lists "3 sets"; +2×5,000 test steps for Wood; buys and opens a Neon Harbor and a Blossom Gardens pack (`shared/buy-and-open-pack.yaml`, `SET` env); each set's Profile collection shows 1–5 of 13 |
 
-`shared/` holds sub-flows for opening the app, finishing onboarding and resetting it. `open-app` runs `finish-onboarding` by itself when a fresh install (wiped Expo Go data) starts on the intro slides.
+`shared/` holds sub-flows for opening the app, finishing onboarding, resetting it and buying + opening one pack of any set (`runFlow` with `env: { SET: <set id> }`). `open-app` runs `finish-onboarding` by itself when a fresh install (wiped Expo Go data) starts on the intro slides.
 
 ## Writing flows
 

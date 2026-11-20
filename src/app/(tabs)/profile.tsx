@@ -178,7 +178,7 @@ export default function ProfileScreen() {
             <AppText weight="strong" className="text-sm">
               {set.name}
             </AppText>
-            <AppText tone="muted" className="text-xs">
+            <AppText tone="muted" className="text-xs" testID={`collection-count-${set.id}`}>
               {set.items.filter((i) => (s.collection[i.id]?.count ?? 0) > 0).length}/{set.items.length}
             </AppText>
           </View>
