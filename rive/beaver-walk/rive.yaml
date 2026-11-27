@@ -1,0 +1,5 @@
+﻿name: beaver-walk
+main: Beaver
+logs:
+  file: build/rive.log
+  problems: build/problems.log

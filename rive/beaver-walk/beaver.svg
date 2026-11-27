@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 700" width="600" height="700">
+  <!-- Original beaver for the walk cycle: flat, outline-free style, 3/4 view facing right,
+       carrying a log diagonally in both hands. One <g> per moving part, back to front.
+       Legs share one shape, drawn around the hip (the group's translate is the hip joint).
+       `rive svg beaver.svg` turns this into beaver.rml once; after that the RML is the source. -->
+  <defs>
+    <clipPath id="head-clip">
+      <ellipse cx="300" cy="300" rx="150" ry="134"/>
+    </clipPath>
+    <clipPath id="tail-clip">
+      <path d="M232 572C200 586 150 598 104 586C66 576 52 546 66 520C82 492 128 486 168 498C200 508 226 532 246 552Z"/>
+    </clipPath>
+    <clipPath id="body-clip">
+      <ellipse cx="292" cy="478" rx="98" ry="100"/>
+    </clipPath>
+    <radialGradient id="blush" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#F49C9C" stop-opacity="0.75"/>
+      <stop offset="0.55" stop-color="#F49C9C" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#F49C9C" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <g id="shadow">
+    <ellipse cx="292" cy="640" rx="150" ry="17" fill="#3F2A20" opacity="0.16"/>
+  </g>
+
+  <g id="tail">
+    <path d="M232 572C200 586 150 598 104 586C66 576 52 546 66 520C82 492 128 486 168 498C200 508 226 532 246 552Z" fill="#6E4433"/>
+    <g clip-path="url(#tail-clip)" stroke="#5A3627" stroke-width="5" stroke-linecap="round" fill="none">
+      <path d="M70 486L150 606M105 481L185 601M140 481L220 601M180 486L250 586"/>
+      <path d="M60 576L160 481M85 601L200 491M125 611L235 511M50 541L120 481"/>
+    </g>
+  </g>
+
+  <!-- Legs: the same pill with a rounded foot, hip at the group origin, sole at y = 120. -->
+  <g id="leg-far" transform="translate(334 520)">
+    <path d="M-28 0C-30 40-30 78-27 100C-24 122 16 124 32 114C42 107 38 97 27 94C29 64 29 34 28 0Z" fill="#B47A4F"/>
+  </g>
+
+  <g id="body">
+    <ellipse cx="292" cy="478" rx="98" ry="100" fill="#C98B5E"/>
+    <g clip-path="url(#body-clip)">
+      <ellipse cx="322" cy="504" rx="58" ry="76" fill="#F6E3C8"/>
+      <ellipse cx="200" cy="496" rx="40" ry="110" fill="#B47A4F" opacity="0.45"/>
+    </g>
+  </g>
+
+  <g id="leg-near" transform="translate(252 524)">
+    <path d="M-28 0C-30 40-30 78-27 100C-24 122 16 124 32 114C42 107 38 97 27 94C29 64 29 34 28 0Z" fill="#C98B5E"/>
+  </g>
+
+  <g id="ear-far">
+    <circle cx="398" cy="184" r="32" fill="#B47A4F"/>
+    <circle cx="400" cy="188" r="17" fill="#9A6044"/>
+  </g>
+  <g id="ear-near">
+    <circle cx="196" cy="190" r="38" fill="#C98B5E"/>
+    <circle cx="200" cy="194" r="21" fill="#A4684A"/>
+  </g>
+
+  <g id="head">
+    <ellipse cx="300" cy="300" rx="150" ry="134" fill="#C98B5E"/>
+    <g clip-path="url(#head-clip)">
+      <ellipse cx="425" cy="310" rx="60" ry="150" fill="#D69A6C" opacity="0.35"/>
+      <circle cx="248" cy="338" r="40" fill="url(#blush)"/>
+      <circle cx="440" cy="318" r="26" fill="url(#blush)"/>
+    </g>
+    <ellipse cx="300" cy="290" rx="12.5" ry="16" fill="#2A2638"/>
+    <circle cx="295.5" cy="283" r="4.2" fill="#FFFFFF"/>
+    <ellipse cx="404" cy="282" rx="11.5" ry="15" fill="#2A2638"/>
+    <circle cx="399.5" cy="275.5" r="3.8" fill="#FFFFFF"/>
+    <!-- muzzle (nose, mouth, teeth, whisker puffs on both sides), set a little down and left -->
+    <g id="muzzle" transform="translate(-8 12)">
+      <ellipse cx="378" cy="342" rx="68" ry="43" fill="#F6E3C8"/>
+      <circle cx="447" cy="322" r="11" fill="#F6E3C8"/>
+      <circle cx="449" cy="342" r="10" fill="#F6E3C8"/>
+      <circle cx="309" cy="322" r="11" fill="#F6E3C8"/>
+      <circle cx="307" cy="342" r="10" fill="#F6E3C8"/>
+      <rect x="366" y="347" width="25" height="24" rx="6" fill="#FFFFFF"/>
+      <path d="M378.5 350V368" stroke="#E2D4C4" stroke-width="2" stroke-linecap="round"/>
+      <path d="M357 338C364 350 375 348 378.5 341C382 348 393 350 400 338" fill="none" stroke="#2A2638" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M362 320C362 310 396 310 396 320C396 330 386 336 379 336C372 336 362 330 362 320Z" fill="#3A2622"/>
+    </g>
+  </g>
+
+  <g id="tuft">
+    <circle cx="306" cy="170" r="15" fill="#C98B5E"/>
+    <circle cx="326" cy="168" r="12" fill="#C98B5E"/>
+  </g>
+
+  <!-- The far arm runs down BEHIND the log and cups it from below: only the paw shows under the
+       log's bottom edge, and its fingertips (paw-far) curl up onto the log's face. -->
+  <g id="arm-far">
+    <path d="M372 420C392 418 406 436 404 458C402 482 390 500 370 508C352 515 334 510 332 498C330 488 344 482 356 478C368 474 372 452 366 436Z" fill="#B47A4F"/>
+  </g>
+
+  <g id="log">
+    <!-- a short log, ends cut, lying from lower left (near paw) to upper right (far paw) -->
+    <path d="M188 518L410 388L440 440L218 570Z" fill="#9A5B33"/>
+    <path d="M204 544L424 414" stroke="#7E4626" stroke-width="5" stroke-linecap="round"/>
+    <path d="M262 515L322 480M300 520L352 489M236 554L274 532" stroke="#7E4626" stroke-width="4" stroke-linecap="round" opacity="0.8"/>
+    <ellipse cx="425" cy="414" rx="17" ry="30" transform="rotate(-30 425 414)" fill="#F1C98E"/>
+    <ellipse cx="425" cy="414" rx="9" ry="17" transform="rotate(-30 425 414)" fill="none" stroke="#CF9A5C" stroke-width="3"/>
+    <ellipse cx="203" cy="544" rx="17" ry="30" transform="rotate(-30 203 544)" fill="#F1C98E"/>
+    <ellipse cx="203" cy="544" rx="9" ry="17" transform="rotate(-30 203 544)" fill="none" stroke="#CF9A5C" stroke-width="3"/>
+  </g>
+
+  <!-- Far paw tip, curled up over the log's bottom edge: a rounded mitten with two finger creases,
+       the same as the near (right) paw. -->
+  <g id="paw-far">
+    <path d="M336 496C330 480 344 466 362 465C378 464 388 474 383 488C378 500 360 508 348 507C342 506 338 502 336 496Z" fill="#B47A4F"/>
+    <path d="M348 496Q356 502 364 497M345 486Q353 492 361 487" stroke="#9A6044" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  </g>
+
+  <!-- The near arm grows from under the head, rounded all the way to a soft paw on the log. -->
+
+  <g id="arm-near">
+    <path d="M232 416C212 416 196 436 194 468C192 500 204 528 222 538C238 548 260 542 262 526C264 512 250 504 242 496C234 486 236 464 246 446C256 428 252 416 232 416Z" fill="#C98B5E"/>
+    <path d="M232 530Q240 536 248 532M228 520Q236 526 244 522" stroke="#A4684A" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+    <!-- soft crease so the arm reads against the same-coloured body -->
+    <path d="M246 446C236 466 234 484 242 498" stroke="#B47A4F" stroke-width="4" stroke-linecap="round" fill="none" opacity="0.7"/>
+  </g>
+</svg>
