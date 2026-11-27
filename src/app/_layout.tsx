@@ -72,6 +72,8 @@ export default function RootLayout() {
           <Stack.Screen name="dev/components" />
           <Stack.Screen name="dev/signup/[variant]" options={{ contentStyle: { backgroundColor: colors.card } }} />
           <Stack.Screen name="edit-name" options={{ contentStyle: { backgroundColor: colors.card } }} />
+          {/* The bell on Home. */}
+          <Stack.Screen name="notifications" />
         </Stack.Protected>
         {/* Last step of onboarding, and reachable from Profile later. */}
         <Stack.Screen name="save-progress" options={{ contentStyle: { backgroundColor: colors.card } }} />

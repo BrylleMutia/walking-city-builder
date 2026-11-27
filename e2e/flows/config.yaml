@@ -4,6 +4,7 @@ executionOrder:
   continueOnFailure: false
   flowsOrder:
     - 00-reset
+    - 11-notifications
     - 01-tabs
     - 02-steps
     - 03-buy-and-open
