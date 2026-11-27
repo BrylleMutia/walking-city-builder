@@ -1,6 +1,6 @@
 import { Canvas, Circle, Group, LinearGradient, Oval, Path, Rect, vec } from '@shopify/react-native-skia';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ScrollView, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -16,6 +16,7 @@ import {
   SquareButton,
   formatNumber,
 } from '../../components/ui/kit';
+import { Popover } from '../../components/ui/Popover';
 import { Tap } from '../../components/ui/Tap';
 import { toast } from '../../components/ui/toast';
 import { RARITY_COLOR, RARITY_LABEL, RARITY_ORDER, RARITY_WEIGHTS, FOIL_CHANCE } from '../../data/rarity';
@@ -38,6 +39,11 @@ export default function SetDetailScreen() {
   const [buying, setBuying] = useState(false);
   const [showOdds, setShowOdds] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  // Stable, so the popover's back-button listener isn't re-added on every render.
+  const closeOdds = useCallback(() => setShowOdds(false), []);
+  // Where the % button really is (in the bar, which spans the screen), so the
+  // tooltip's caret points at its centre.
+  const [oddsAnchor, setOddsAnchor] = useState({ x: 24, width: 56, height: 56 });
 
   if (!listing) {
     return (
@@ -48,6 +54,7 @@ export default function SetDetailScreen() {
   }
 
   const live = !!listing.set;
+  const barPad = Math.max(insets.bottom, 14) + 6;
   const short = Math.max(0, listing.price - balance);
   const heroH = Math.round(width * 0.92);
 
@@ -109,8 +116,6 @@ export default function SetDetailScreen() {
           </Tap>
         </View>
 
-        {live && showOdds && <OddsCard />}
-
         {live && listing.set && (
           <View className="mt-6">
             <View className="px-6 flex-row items-center justify-between mb-3">
@@ -144,15 +149,17 @@ export default function SetDetailScreen() {
       {/* sticky actions, like "🔖 Book Now" */}
       <View
         className="absolute left-0 right-0 bottom-0 px-6 pt-3 bg-canvas flex-row items-center"
-        style={{ paddingBottom: Math.max(insets.bottom, 14) + 6, gap: 12 }}
+        style={{ paddingBottom: barPad, gap: 12 }}
       >
-        <SquareButton
-          icon="percent"
-          active={showOdds}
-          testID="toggle-odds"
-          onPress={() => setShowOdds((v) => !v)}
-          accessibilityLabel="Show drop rates"
-        />
+        <View onLayout={(e) => setOddsAnchor(e.nativeEvent.layout)}>
+          <SquareButton
+            icon="percent"
+            active={showOdds}
+            testID="toggle-odds"
+            onPress={() => setShowOdds((v) => !v)}
+            accessibilityLabel={showOdds ? 'Hide drop rates' : 'Show drop rates'}
+          />
+        </View>
         <View className="flex-1">
           {live ? (
             <PillButton
@@ -177,13 +184,25 @@ export default function SetDetailScreen() {
           )}
         </View>
       </View>
+
+      {/* Drop rates: a tooltip above the % button, its caret on the button's centre. */}
+      <Popover
+        open={live && showOdds}
+        onClose={closeOdds}
+        style={{ left: oddsAnchor.x, bottom: barPad + oddsAnchor.height + 12, width: 260 }}
+        caretX={oddsAnchor.width / 2}
+        testID="odds-popover"
+      >
+        <OddsTable />
+      </Popover>
     </View>
   );
 }
 
-function OddsCard() {
+
+function OddsTable() {
   return (
-    <Card className="mx-6 mt-5 p-4 rounded-tile">
+    <View>
       <AppText weight="strong" className="text-sm mb-2">
         Drop rates per card
       </AppText>
@@ -202,7 +221,7 @@ function OddsCard() {
           {Math.round(FOIL_CHANCE * 100)}%
         </AppText>
       </View>
-    </Card>
+    </View>
   );
 }
 
