@@ -47,7 +47,16 @@
           }
         }
       ],
-      "react-native-health-connect"
+      "react-native-health-connect",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": false
+        }
+      ],
+      "expo-asset"
     ],
     "scheme": "stridewood",
     "extra": {
