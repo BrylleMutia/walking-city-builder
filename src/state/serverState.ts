@@ -3,7 +3,8 @@ import { getItem } from '../data/items';
 import type { Rarity } from '../data/rarity';
 import type { ItemId } from '../data/sets/types';
 import type { PackCard } from '../logic/openPack';
-import type { GameData, Owned, Placed } from './gameLogic';
+import type { CitySummary, GameData, Owned, Placed } from './gameLogic';
+import type { ServerNotice } from './notifications';
 
 /** Shape of `get_my_state()` from the database. */
 export interface ServerState {
@@ -20,7 +21,15 @@ export interface ServerState {
   /** day (YYYY-MM-DD) → steps */
   steps: Record<string, number>;
   inventory: Record<string, { count: number; foil: number }>;
+  /** The tiles of one city: `city_id` (the requested one, or the first city). */
   city: { x: number; y: number; item_id: string }[];
+  /** The player's cities. Servers from before multi_city don't send these three. */
+  cities?: { id: string; name: string | null; position: number; lots: number }[];
+  city_id?: string | null;
+  /** item id → copies placed across every city (the shared pool). */
+  placed?: Record<string, number>;
+  /** Newest 50, newest first. Servers from before the `notifications` migration don't send it. */
+  notifications?: ServerNotice[];
 }
 
 /** One card as returned by `buy_pack()`. */
@@ -58,9 +67,23 @@ export function applyServerState<T extends GameData>(
     if (getItem(id as ItemId)) collection[id as ItemId] = { count: owned.count, foil: owned.foil };
   }
 
-  const city: Placed[] = server.city
-    .filter((t) => getItem(t.item_id as ItemId))
-    .map((t) => ({ itemId: t.item_id as ItemId, x: t.x, y: t.y }));
+  const city = toPlaced(server.city);
+
+  const cities: CitySummary[] = (server.cities ?? []).map((c) => ({
+    id: c.id,
+    name: c.name ?? null,
+    position: c.position,
+    lots: c.lots,
+  }));
+  // What stands in the other cities: every placed copy minus this city's own.
+  const placedElsewhere: Partial<Record<ItemId, number>> = {};
+  if (server.placed) {
+    for (const [id, n] of Object.entries(server.placed)) {
+      if (!getItem(id as ItemId)) continue;
+      const here = city.filter((t) => t.itemId === id).length;
+      if (n - here > 0) placedElsewhere[id as ItemId] = n - here;
+    }
+  }
 
   const p = server.profile;
   const serverToday = server.steps[today] ?? 0;
@@ -72,6 +95,8 @@ export function applyServerState<T extends GameData>(
     history,
     collection,
     city,
+    // An older server knows one city only: keep what we have (nothing).
+    ...(server.cities ? { cities, activeCityId: server.city_id ?? null, placedElsewhere } : {}),
     ...(p
       ? {
           balance: p.balance,
@@ -83,6 +108,13 @@ export function applyServerState<T extends GameData>(
         }
       : {}),
   };
+}
+
+/** A city's tiles from the server, skipping items this build doesn't know. */
+export function toPlaced(tiles: ServerState['city']): Placed[] {
+  return tiles
+    .filter((t) => getItem(t.item_id as ItemId))
+    .map((t) => ({ itemId: t.item_id as ItemId, x: t.x, y: t.y }));
 }
 
 /** Turns server-rolled cards into the app's PackCard objects (already sorted). */

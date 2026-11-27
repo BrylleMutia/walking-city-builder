@@ -1,7 +1,20 @@
 import { isAvatarId } from '../data/avatars';
 import { getItem } from '../data/items';
 import type { ItemId } from '../data/sets/types';
-import { EMPTY_HAUL, GRID_SIZE, fitCity, initialData, type CityOp, type GameData, type Haul, type Owned, type Placed } from './gameLogic';
+import {
+  CITY_NAME_MAX,
+  EMPTY_HAUL,
+  GRID_SIZE,
+  fitCity,
+  initialData,
+  type CityOp,
+  type CitySummary,
+  type GameData,
+  type Haul,
+  type Owned,
+  type Placed,
+} from './gameLogic';
+import { sanitizeIds, sanitizeNotices, type Notice } from './notifications';
 
 /**
  * The on-disk cache of the game store (zustand persist) and how old caches are
@@ -12,11 +25,12 @@ import { EMPTY_HAUL, GRID_SIZE, fitCity, initialData, type CityOp, type GameData
  * step for the old version in `migrateCache` (renames, unit changes, …) before
  * the final sanitize pass.
  */
-export const CACHE_VERSION = 4;
+export const CACHE_VERSION = 7;
 
 /** Everything the store writes to disk. */
 export interface CachedData extends GameData {
   hapticsOn: boolean;
+  soundOn: boolean;
   forceLegendary: boolean;
   forceFoil: boolean;
   pendingCity: CityOp[];
@@ -26,6 +40,15 @@ export interface CachedData extends GameData {
   profilePending: boolean;
   /** Steps and Wood credited since the "your walk paid off" popup last showed. */
   haul: Haul;
+  /**
+   * Last known tiles of cities other than the active one (only those seen on
+   * this phone), so switching back is instant and works offline.
+   */
+  cityTiles: Record<string, Placed[]>;
+  /** Newest notifications from the server, so the bell's dot shows at launch and offline. */
+  notifications: Notice[];
+  /** Notifications read on this phone that the server hasn't confirmed yet (re-sent on connect). */
+  notificationsReadPending: string[];
 }
 
 type Raw = Record<string, unknown>;
@@ -41,6 +64,8 @@ const name = (v: unknown, fallback: string) => {
 };
 const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
 const isItem = (v: unknown): v is ItemId => typeof v === 'string' && !!getItem(v as ItemId);
+/** Server ids are uuids. */
+const isId = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f-]{36}$/i.test(v);
 const onGrid = (x: unknown, y: unknown): boolean =>
   Number.isInteger(x) && Number.isInteger(y) && (x as number) >= 0 && (y as number) >= 0 &&
   (x as number) < GRID_SIZE && (y as number) < GRID_SIZE;
@@ -66,11 +91,28 @@ export function sanitizeCache(raw: unknown, today?: string): CachedData {
     }
   }
 
-  const city: Placed[] = [];
-  if (Array.isArray(r.city)) {
-    for (const p of r.city) {
-      if (!isObj(p) || !isItem(p.itemId) || !onGrid(p.x, p.y)) continue;
-      city.push({ itemId: p.itemId, x: p.x as number, y: p.y as number });
+  const city = tiles(r.city);
+
+  const cities: CitySummary[] = [];
+  if (Array.isArray(r.cities)) {
+    for (const c of r.cities) {
+      if (!isObj(c) || !isId(c.id) || cities.some((k) => k.id === c.id)) continue;
+      const cityName = typeof c.name === 'string' && c.name.trim().length >= 1 && c.name.length <= CITY_NAME_MAX ? c.name : null;
+      cities.push({ id: c.id, name: cityName, position: count(c.position, cities.length), lots: count(c.lots, 0) });
+    }
+  }
+  const knownCity = (id: unknown): id is string => isId(id) && cities.some((c) => c.id === id);
+
+  const placedElsewhere: Partial<Record<ItemId, number>> = {};
+  if (isObj(r.placedElsewhere)) {
+    for (const [k, v] of Object.entries(r.placedElsewhere)) if (isItem(k) && count(v, 0) > 0) placedElsewhere[k] = count(v, 0);
+  }
+
+  const activeCityId = knownCity(r.activeCityId) ? r.activeCityId : null;
+  const cityTiles: Record<string, Placed[]> = {};
+  if (isObj(r.cityTiles)) {
+    for (const [id, list] of Object.entries(r.cityTiles)) {
+      if (knownCity(id) && id !== activeCityId) cityTiles[id] = fitCity(tiles(list));
     }
   }
 
@@ -78,17 +120,19 @@ export function sanitizeCache(raw: unknown, today?: string): CachedData {
   if (Array.isArray(r.pendingCity)) {
     for (const o of r.pendingCity) {
       if (!isObj(o)) continue;
+      // Ops queued before cities existed (cache v4) belong to the first city.
+      const cityId = isId(o.cityId) ? o.cityId : null;
       if (o.op === 'move') {
         if (onGrid(o.fx, o.fy) && onGrid(o.tx, o.ty)) {
-          pendingCity.push({ op: 'move', fx: o.fx as number, fy: o.fy as number, tx: o.tx as number, ty: o.ty as number });
+          pendingCity.push({ cityId, op: 'move', fx: o.fx as number, fy: o.fy as number, tx: o.tx as number, ty: o.ty as number });
         }
         continue;
       }
       if (!onGrid(o.x, o.y)) continue;
       const x = o.x as number;
       const y = o.y as number;
-      if (o.op === 'place' && isItem(o.itemId)) pendingCity.push({ op: 'place', itemId: o.itemId, x, y });
-      else if (o.op === 'remove') pendingCity.push({ op: 'remove', x, y });
+      if (o.op === 'place' && isItem(o.itemId)) pendingCity.push({ cityId, op: 'place', itemId: o.itemId, x, y });
+      else if (o.op === 'remove') pendingCity.push({ cityId, op: 'remove', x, y });
     }
   }
 
@@ -105,8 +149,13 @@ export function sanitizeCache(raw: unknown, today?: string): CachedData {
     // several lots may overlap): later ones that don't go back to the inventory,
     // like the server's `item_footprints` migration did.
     city: fitCity(city),
+    cities,
+    activeCityId,
+    placedElsewhere,
+    cityTiles,
     packsOpened: count(r.packsOpened, d.packsOpened),
     hapticsOn: bool(r.hapticsOn, true),
+    soundOn: bool(r.soundOn, true),
     forceLegendary: bool(r.forceLegendary, false),
     forceFoil: bool(r.forceFoil, false),
     pendingCity,
@@ -114,6 +163,8 @@ export function sanitizeCache(raw: unknown, today?: string): CachedData {
     profilePending: bool(r.profilePending, false),
     avatarId: isAvatarId(r.avatarId) ? r.avatarId : d.avatarId,
     haul: isObj(r.haul) ? { steps: count(r.haul.steps, 0), wood: count(r.haul.wood, 0) } : EMPTY_HAUL,
+    notifications: sanitizeNotices(r.notifications),
+    notificationsReadPending: sanitizeIds(r.notificationsReadPending),
   };
 }
 
@@ -130,14 +181,21 @@ export function toCache(s: CachedData): CachedData {
     avatarId: s.avatarId,
     collection: s.collection,
     city: s.city,
+    cities: s.cities,
+    activeCityId: s.activeCityId,
+    placedElsewhere: s.placedElsewhere,
+    cityTiles: s.cityTiles,
     packsOpened: s.packsOpened,
     hapticsOn: s.hapticsOn,
+    soundOn: s.soundOn,
     forceLegendary: s.forceLegendary,
     forceFoil: s.forceFoil,
     pendingCity: s.pendingCity,
     onboarded: s.onboarded,
     profilePending: s.profilePending,
     haul: s.haul,
+    notifications: s.notifications,
+    notificationsReadPending: s.notificationsReadPending,
   };
 }
 
@@ -153,7 +211,16 @@ export function toCache(s: CachedData): CachedData {
  *   both axes (server migration `city_grid_16`).
  * - 4: the currency changed from Steps to Wood (server migration
  *   `wood_currency`): `balance` is divided by 5, like the server's wallets, and
- *   `haul` is added. Current shape, `CachedData`.
+ *   `haul` is added.
+ * - 5: several cities per player (server migration `multi_city`): adds
+ *   `cities`, `activeCityId`, `placedElsewhere` and `cityTiles`, and every
+ *   queued city op gets a `cityId` (null = the first city, which is where the
+ *   v4 town now lives). Sanitize fills all of it in.
+ * - 6: in-app notifications (server migration `notifications`): adds
+ *   `notifications` and `notificationsReadPending`, both empty until the next
+ *   sync (sanitize fills them in).
+ * - 7: pack-reveal chimes: adds the `soundOn` setting (on by default; sanitize
+ *   fills it in). Current shape, `CachedData`.
  */
 export function migrateCache(persisted: unknown, fromVersion: number, today?: string): CachedData {
   let data = persisted;
@@ -171,6 +238,17 @@ export function migrateCache(persisted: unknown, fromVersion: number, today?: st
   }
   // Future shape changes: transform `data` here, oldest version first.
   return sanitizeCache(data, today);
+}
+
+/** A list of placed objects, keeping only well-formed entries. */
+function tiles(list: unknown): Placed[] {
+  const out: Placed[] = [];
+  if (!Array.isArray(list)) return out;
+  for (const p of list) {
+    if (!isObj(p) || !isItem(p.itemId) || !onGrid(p.x, p.y)) continue;
+    out.push({ itemId: p.itemId, x: p.x as number, y: p.y as number });
+  }
+  return out;
 }
 
 /** How far towns moved when the lawn grew from 12×12 to 16×16 (re-centered). */

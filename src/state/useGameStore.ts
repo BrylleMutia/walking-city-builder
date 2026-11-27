@@ -8,12 +8,14 @@ import { isAvatarId, type AvatarId } from '../data/avatars';
 import { getListing } from '../data/sets';
 import type { ItemId } from '../data/sets/types';
 import { setHapticsEnabled } from '../lib/haptics';
+import { setSoundEnabled } from '../lib/sound';
 import type { PackCard } from '../logic/openPack';
 import * as api from './backend';
 import { BackendError, type BackendReason } from './backend';
 import { CACHE_VERSION, migrateCache, sanitizeCache, toCache } from './cache';
 import * as G from './gameLogic';
-import { applyServerState, toPackCards } from './serverState';
+import { markRead, mergeServerNotices, type Notice } from './notifications';
+import { applyServerState, toPackCards, toPlaced, type ServerState } from './serverState';
 
 /**
  * Step sensor: `unavailable` = this phone/build can't count steps (Expo Go on
@@ -33,6 +35,8 @@ export type CloudStatus = 'connecting' | 'online' | 'offline' | 'signin_disabled
 
 export interface Settings {
   hapticsOn: boolean;
+  /** Pack-reveal chimes. */
+  soundOn: boolean;
   /** Testing aids for pack rolls; the server honours them only for tester accounts. */
   forceLegendary: boolean;
   forceFoil: boolean;
@@ -74,6 +78,12 @@ interface GameStore extends G.GameData, Settings {
   haul: G.Haul;
   /** Not persisted: the popup is up (set by an app open once the haul is big enough). */
   showHaul: boolean;
+  /** Persisted: last known tiles of the cities that aren't active (see cache.ts). */
+  cityTiles: Record<string, G.Placed[]>;
+  /** Persisted: the newest notifications (the bell on Home), newest first. */
+  notifications: Notice[];
+  /** Persisted: read on this phone, not yet confirmed by the server (re-sent on connect). */
+  notificationsReadPending: string[];
 
   /** Signs in (anonymously), uploads steps walked offline, then loads the server state. */
   connect: () => Promise<void>;
@@ -106,6 +116,19 @@ interface GameStore extends G.GameData, Settings {
   removeAt: (x: number, y: number) => boolean;
   /** Optimistic: moves an object (or swaps two) at once, then confirms with the server. */
   moveItem: (fx: number, fy: number, tx: number, ty: number) => boolean;
+  /**
+   * Shows another city at once (from its cached tiles, or empty), then loads it
+   * from the server. Only the active city is ever kept in `city` and drawn.
+   */
+  switchCity: (id: string) => void;
+  /** Buys a new, empty city on the server and switches to it. */
+  createCity: (name: string | null) => Promise<BuyResult>;
+  /** An empty name restores the default one. Needs a connection. */
+  renameCity: (id: string, name: string) => Promise<BuyResult>;
+  /** Its buildings go back to the inventory. Needs a connection; the last city can't go. */
+  deleteCity: (id: string) => Promise<BuyResult>;
+  /** Fetches a city's tiles for its preview when this phone hasn't seen them. */
+  loadCityTiles: (id: string) => Promise<void>;
   setSetting: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
   setSensor: (status: SensorStatus) => void;
   reset: () => Promise<boolean>;
@@ -113,6 +136,8 @@ interface GameStore extends G.GameData, Settings {
   pauseLive: () => void;
   /** Closes the popup and starts a new haul. */
   dismissHaul: () => void;
+  /** Optimistic: marks one notification read at once, then tells the server (queued while offline). */
+  markNotificationRead: (id: string) => void;
 }
 
 const STEP_SYNC_DELAY = 1200;
@@ -148,12 +173,67 @@ export const useGameStore = create<GameStore>()(
        * Takes the server's state as truth, then puts any still-queued local city
        * changes back on top so they never visibly disappear.
        */
-      const adoptServer = (server: Awaited<ReturnType<typeof api.fetchState>>) =>
+      const adoptServer = (server: ServerState) =>
         set((cur) => {
           const unsynced = stepSyncTimer !== null || flushingSteps;
-          const next = keepLocalProfile(cur, applyServerState(cur, server, G.dayKey(), unsynced));
-          return G.applyCityOps(next, [...cur.pendingCity, ...inflightCity]);
+          return adopt(cur, server, G.dayKey(), unsynced, [...cur.pendingCity, ...inflightCity]);
         });
+
+      /**
+       * The server's state on top of the local one. When the answer is for a city
+       * the player has switched away from in the meantime, everything but the city
+       * is taken and the active city is fetched again.
+       */
+      const adopt = (
+        cur: GameStore,
+        server: ServerState,
+        today: string,
+        unsynced: boolean,
+        ops: readonly G.CityOp[],
+      ): Partial<GameStore> => {
+        let next = keepLocalProfile(cur, applyServerState(cur, server, today, unsynced));
+        const stale =
+          !!server.city_id &&
+          !!cur.activeCityId &&
+          server.city_id !== cur.activeCityId &&
+          (server.cities ?? []).some((c) => c.id === cur.activeCityId);
+        if (stale) {
+          next = { ...next, city: cur.city, activeCityId: cur.activeCityId, placedElsewhere: cur.placedElsewhere };
+          scheduleRefresh();
+        }
+        const active = G.activeCityOf(next);
+        // Cached tiles only for cities that still exist and aren't the one on screen.
+        const cityTiles =
+          next.cities.length === 0
+            ? cur.cityTiles
+            : Object.fromEntries(
+                Object.entries(cur.cityTiles).filter(([id]) => id !== active && next.cities.some((c) => c.id === id)),
+              );
+        // Older servers don't send notifications: keep the cached ones.
+        const notifications = server.notifications
+          ? mergeServerNotices(server.notifications, cur.notificationsReadPending, new Date().toISOString())
+          : cur.notifications;
+        return { ...G.applyCityOps(next, ops), cityTiles, notifications };
+      };
+
+      /**
+       * Sends the notifications read on this phone. Confirmed ids leave the
+       * queue (reads made meanwhile stay); offline keeps them for the next
+       * connect; any other refusal drops them (the server's read state wins).
+       */
+      const pushReads = async () => {
+        const ids = get().notificationsReadPending;
+        if (ids.length === 0) return;
+        const drop = () =>
+          set((cur) => ({ notificationsReadPending: cur.notificationsReadPending.filter((i) => !ids.includes(i)) }));
+        try {
+          await api.markNotificationsRead(ids);
+          drop();
+        } catch (e) {
+          if (e instanceof BackendError && e.reason === 'offline') set({ cloud: 'offline' });
+          else drop();
+        }
+      };
 
       /** Sends locally changed name/goal/avatar; pending until the server has those exact values. */
       const pushProfile = async () => {
@@ -185,7 +265,7 @@ export const useGameStore = create<GameStore>()(
       const refresh = async () => {
         const gen = localGen;
         try {
-          const server = await api.fetchState();
+          const server = await api.fetchState(G.activeCityOf(get()));
           // A purchase finished while we were fetching: this answer may predate
           // it, so fetch again rather than show the old inventory.
           if (gen !== localGen) {
@@ -238,10 +318,31 @@ export const useGameStore = create<GameStore>()(
       /** The server call for one city change. */
       const sendOp = (op: G.CityOp): Promise<unknown> =>
         op.op === 'place'
-          ? api.placeItem(op.itemId, op.x, op.y)
+          ? api.placeItem(op.cityId, op.itemId, op.x, op.y)
           : op.op === 'remove'
-            ? api.removeItem(op.x, op.y)
-            : api.moveItem(op.fx, op.fy, op.tx, op.ty);
+            ? api.removeItem(op.cityId, op.x, op.y)
+            : api.moveItem(op.cityId, op.fx, op.fy, op.tx, op.ty);
+
+      /** Waits for a connection; false when there's none (city purchases and edits need the server). */
+      const ensureOnline = async () => {
+        if (get().cloud !== 'online') await get().connect();
+        return get().cloud === 'online';
+      };
+
+      /** Sends today's latest steps first: their Wood may be what makes a purchase affordable. */
+      const flushPendingSteps = async () => {
+        if (!stepSyncTimer) return;
+        clearTimeout(stepSyncTimer);
+        stepSyncTimer = null;
+        await flushSteps();
+      };
+
+      const failure = (e: unknown): BuyResult => {
+        const reason = e instanceof BackendError ? e.reason : 'unknown';
+        if (reason === 'offline') set({ cloud: 'offline' });
+        else void refresh();
+        return { ok: false, reason };
+      };
 
       /** Sends one city change; queues it if the connection fails, re-syncs if rejected. */
       const sendCityOp = (op: G.CityOp) => {
@@ -309,6 +410,7 @@ export const useGameStore = create<GameStore>()(
       return {
         ...G.initialData(),
         hapticsOn: true,
+        soundOn: true,
         forceLegendary: false,
         forceFoil: false,
         hydrated: false,
@@ -322,6 +424,9 @@ export const useGameStore = create<GameStore>()(
         stepTrackingRequested: false,
         haul: G.EMPTY_HAUL,
         showHaul: false,
+        cityTiles: {},
+        notifications: [],
+        notificationsReadPending: [],
 
         connect: () => {
           connecting ??= (async () => {
@@ -340,17 +445,16 @@ export const useGameStore = create<GameStore>()(
               const queued = get().pendingCity.length;
               const toldOffline = offlineNoticeShown;
               await replayCityQueue();
-              const server = await api.fetchState();
-              set((cur) => ({
-                ...G.applyCityOps(keepLocalProfile(cur, applyServerState(cur, server, today)), cur.pendingCity),
-                cloud: 'online',
-              }));
+              const server = await api.fetchState(G.activeCityOf(get()));
+              set((cur) => ({ ...adopt(cur, server, today, false, cur.pendingCity), cloud: 'online' }));
               // Every open (launch or back from the background) ends here: show
               // what the walk earned once it's worth a popup.
               // (Not during onboarding: the haul waits for the first open after it.)
               if (get().onboarded && G.haulReady(get().haul)) set({ showHaul: true });
               // Name/goal picked while offline (or during the very first connect).
               if (get().profilePending) void pushProfile();
+              // Notifications read while offline.
+              void pushReads();
               offlineNoticeShown = false;
               if (toldOffline && queued > 0) {
                 toast.dismiss('city-offline');
@@ -431,6 +535,9 @@ export const useGameStore = create<GameStore>()(
             profilePending: false,
             haul: G.EMPTY_HAUL,
             showHaul: false,
+            cityTiles: {},
+            notifications: [],
+            notificationsReadPending: [],
             accountEmail: saved,
             cloud: 'connecting',
           });
@@ -443,14 +550,8 @@ export const useGameStore = create<GameStore>()(
         buyPack: async (setId) => {
           const listing = getListing(setId);
           if (!listing?.set) return { ok: false, reason: 'set_not_available' };
-          if (get().cloud !== 'online') await get().connect();
-          if (get().cloud !== 'online') return { ok: false, reason: 'offline' };
-          // Today's latest steps first: their Wood may be what makes the pack affordable.
-          if (stepSyncTimer) {
-            clearTimeout(stepSyncTimer);
-            stepSyncTimer = null;
-            await flushSteps();
-          }
+          if (!(await ensureOnline())) return { ok: false, reason: 'offline' };
+          await flushPendingSteps();
           buying++;
           try {
             const s = get();
@@ -489,26 +590,108 @@ export const useGameStore = create<GameStore>()(
           const next = G.placeItem(get(), itemId, x, y);
           if (!next) return false;
           set(next);
-          sendCityOp({ op: 'place', itemId, x, y });
+          sendCityOp({ cityId: G.activeCityOf(next), op: 'place', itemId, x, y });
           return true;
         },
         removeAt: (x, y) => {
           const next = G.removeAt(get(), x, y);
           if (!next) return false;
           set(next);
-          sendCityOp({ op: 'remove', x, y });
+          sendCityOp({ cityId: G.activeCityOf(next), op: 'remove', x, y });
           return true;
         },
         moveItem: (fx, fy, tx, ty) => {
           const next = G.moveItem(get(), fx, fy, tx, ty);
           if (!next) return false;
           set(next);
-          sendCityOp({ op: 'move', fx, fy, tx, ty });
+          sendCityOp({ cityId: G.activeCityOf(next), op: 'move', fx, fy, tx, ty });
           return true;
+        },
+
+        switchCity: (id) => {
+          const cur = get();
+          const from = G.activeCityOf(cur);
+          if (id === from || !cur.cities.some((c) => c.id === id)) return;
+          // A refresh already on its way is for the old city: it re-fetches.
+          localGen++;
+          const cityTiles = { ...cur.cityTiles };
+          delete cityTiles[id];
+          if (from) cityTiles[from] = cur.city;
+          // The list shows the old city's real size until the server counts it again.
+          const lots = G.lotsCovered(cur.city);
+          const cities = cur.cities.map((c) => (c.id === from ? { ...c, lots } : c));
+          set({ ...G.switchCity({ ...cur, cities }, id, cur.cityTiles[id] ?? []), cityTiles });
+          if (cur.cloud === 'online') void refresh();
+        },
+
+        createCity: async (name) => {
+          if (!(await ensureOnline())) return { ok: false, reason: 'offline' };
+          await flushPendingSteps();
+          try {
+            const res = await api.createCity(name);
+            localGen++;
+            const city: G.CitySummary = { id: res.city.id, name: res.city.name, position: res.city.position, lots: 0 };
+            set((cur) => ({ balance: res.balance, cities: [...cur.cities.filter((c) => c.id !== city.id), city] }));
+            get().switchCity(city.id);
+            return { ok: true };
+          } catch (e) {
+            return failure(e);
+          }
+        },
+
+        renameCity: async (id, raw) => {
+          const name = raw.trim() === '' ? null : G.cleanCityName(raw);
+          if (name === null && raw.trim() !== '') return { ok: false, reason: 'invalid_name' };
+          if (!(await ensureOnline())) return { ok: false, reason: 'offline' };
+          set((cur) => ({ cities: cur.cities.map((c) => (c.id === id ? { ...c, name } : c)) }));
+          try {
+            await api.renameCity(id, name);
+            return { ok: true };
+          } catch (e) {
+            return failure(e);
+          }
+        },
+
+        deleteCity: async (id) => {
+          if (get().cities.length <= 1) return { ok: false, reason: 'last_city' };
+          if (!(await ensureOnline())) return { ok: false, reason: 'offline' };
+          try {
+            await api.deleteCity(id);
+            localGen++;
+            set((cur) => {
+              const cities = cur.cities.filter((c) => c.id !== id);
+              const cityTiles = { ...cur.cityTiles };
+              delete cityTiles[id];
+              // Its queued changes have nowhere to go; its buildings are back in the pool.
+              const pendingCity = cur.pendingCity.filter((o) => o.cityId !== id);
+              if (G.activeCityOf(cur) !== id) return { cities, cityTiles, pendingCity };
+              const to = cities[0].id;
+              delete cityTiles[to];
+              return { cities, cityTiles, pendingCity, activeCityId: to, city: cur.cityTiles[to] ?? [] };
+            });
+            // Exact pool counts and the new active city's tiles.
+            await refresh();
+            return { ok: true };
+          } catch (e) {
+            return failure(e);
+          }
+        },
+
+        loadCityTiles: async (id) => {
+          if (get().cloud !== 'online' || id === G.activeCityOf(get())) return;
+          try {
+            const tiles = toPlaced(await api.fetchCity(id));
+            // Switched to it meanwhile: the refresh owns its tiles now.
+            if (id === G.activeCityOf(get()) || !get().cities.some((c) => c.id === id)) return;
+            set((cur) => ({ cityTiles: { ...cur.cityTiles, [id]: tiles } }));
+          } catch {
+            // A preview is optional: the row keeps its placeholder.
+          }
         },
 
         setSetting: (key, value) => {
           if (key === 'hapticsOn') setHapticsEnabled(value as boolean);
+          if (key === 'soundOn') setSoundEnabled(value as boolean);
           set({ [key]: value } as Partial<GameStore>);
         },
         setSensor: (sensor) => set({ sensor }),
@@ -521,6 +704,17 @@ export const useGameStore = create<GameStore>()(
         },
 
         dismissHaul: () => set({ haul: G.EMPTY_HAUL, showHaul: false }),
+
+        markNotificationRead: (id) => {
+          const cur = get();
+          const notice = cur.notifications.find((n) => n.id === id);
+          if (!notice || notice.readAt) return;
+          set({
+            notifications: markRead(cur.notifications, [id], new Date().toISOString()),
+            notificationsReadPending: [...cur.notificationsReadPending, id],
+          });
+          if (get().cloud === 'online') void pushReads();
+        },
 
         reset: async () => {
           if (get().cloud !== 'online') return false;
@@ -537,6 +731,9 @@ export const useGameStore = create<GameStore>()(
               profilePending: false,
               haul: G.EMPTY_HAUL,
               showHaul: false,
+              cityTiles: {},
+              // The server re-arms the welcome; a queued read must not mark it again.
+              notificationsReadPending: [],
             }));
             await refresh();
             return true;
@@ -561,7 +758,10 @@ export const useGameStore = create<GameStore>()(
       migrate: (persisted, version) => migrateCache(persisted, version),
       merge: (persisted, current) => (persisted ? { ...current, ...sanitizeCache(persisted) } : current),
       onRehydrateStorage: () => (state) => {
-        if (state) setHapticsEnabled(state.hapticsOn);
+        if (state) {
+          setHapticsEnabled(state.hapticsOn);
+          setSoundEnabled(state.soundOn);
+        }
         // Deferred: the store constant isn't assigned yet if storage answers synchronously.
         setTimeout(() => useGameStore.setState({ hydrated: true }), 0);
       },

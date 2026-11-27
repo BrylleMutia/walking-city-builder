@@ -12,6 +12,21 @@ const BUY_ERRORS: Partial<Record<BackendReason, string>> = {
 export const buyErrorMessage = (reason: BackendReason) =>
   BUY_ERRORS[reason] ?? 'Something went wrong. Please try again.';
 
+/** Player-facing explanation for a failed city change (new, rename, delete). */
+const CITY_ERRORS: Partial<Record<BackendReason, string>> = {
+  offline: 'Can’t reach the server. Check your connection and try again.',
+  anonymous_disabled: 'Cities can’t be changed right now. Try again later.',
+  not_configured: 'Cities can’t be changed in this build.',
+  insufficient_wood: 'Not enough Wood yet: keep walking!',
+  city_limit: 'You have as many cities as you can have.',
+  last_city: 'You need at least one city.',
+  city_not_found: 'That city is gone. Your list was refreshed.',
+  invalid_name: 'City names are 1 to 24 characters.',
+};
+
+export const cityErrorMessage = (reason: BackendReason) =>
+  CITY_ERRORS[reason] ?? 'Something went wrong. Please try again.';
+
 /** Player-facing explanation for a failed email sign-up step. */
 const ACCOUNT_ERRORS: Partial<Record<BackendReason, string>> = {
   offline: 'Can’t reach the server. Check your connection and try again.',
