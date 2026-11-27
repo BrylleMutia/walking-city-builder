@@ -1,28 +1,31 @@
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { ScrollView, View, useWindowDimensions } from 'react-native';
+import { View, useWindowDimensions } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 
+import { WeekRings } from '../../components/home/WeekSteps';
 import { AnimatedCounter } from '../../components/ui/AnimatedCounter';
 import { AppText } from '../../components/ui/AppText';
 import { Avatar, HERO_ASPECT, HomeHeroArt } from '../../components/ui/illustrations';
 import {
   ArrowButton,
   Card,
-  Meta,
   SectionHeader,
   StatTile,
   WoodPill,
+  type Stat,
   formatNumber,
 } from '../../components/ui/kit';
+import { NotificationBell } from '../../components/ui/NotificationBell';
 import { ProgressRing } from '../../components/ui/ProgressRing';
 import { Screen } from '../../components/ui/Screen';
 import { Tap } from '../../components/ui/Tap';
 import { SET_LISTINGS } from '../../data/sets';
 import { recentDays, streak } from '../../state/gameLogic';
+import { unreadCount } from '../../state/notifications';
 import { useGameStore } from '../../state/useGameStore';
-import { colors } from '../../theme/tokens';
+import { colors, softShadow } from '../../theme/tokens';
 
 // Rough averages, good enough for a friendly dashboard.
 const KM_PER_STEP = 0.000762;
@@ -45,19 +48,25 @@ export default function HomeScreen() {
       balance: st.balance,
       displayName: st.displayName,
       avatarId: st.avatarId,
-      cityCount: st.city.length,
       sensor: st.sensor,
+      unread: unreadCount(st.notifications),
       addSteps: st.addSteps,
     })),
   );
   const pct = s.goal > 0 ? s.stepsToday / s.goal : 0;
   const toGo = Math.max(0, s.goal - s.stepsToday);
   const cheapest = Math.min(...SET_LISTINGS.filter((l) => l.set).map((l) => l.price));
+  const canBuy = s.balance >= cheapest;
 
   const today = useMemo(() => new Date(), []);
   const week = useMemo(() => recentDays(s, today), [s, today]);
   const days = streak(s, today);
-  const weekMax = Math.max(s.goal, ...week.map((d) => d.steps));
+  const toShop = () => router.navigate('/shop');
+  const stats: Stat[] = [
+    { icon: 'map-pin', tint: 'primary', value: (s.stepsToday * KM_PER_STEP).toFixed(1), unit: 'km', label: 'Distance' },
+    { icon: 'zap', tint: 'accent', value: formatNumber(s.stepsToday * KCAL_PER_STEP), unit: 'kcal', label: 'Energy' },
+    { icon: 'clock', tint: 'sky', value: formatNumber(s.stepsToday / STEPS_PER_ACTIVE_MIN), unit: 'min', label: 'Active' },
+  ];
 
   // Measured from the hero row itself: `width - 48` (window minus px-6) came
   // out a few dp narrower than the real content box on Android, which left
@@ -74,11 +83,32 @@ export default function HomeScreen() {
         </View>
         <View className="flex-1 ml-3">
           <AppText tone="muted" className="text-sm">
-            Let’s do this
+            Let’s do this!
           </AppText>
           <AppText weight="heavy" className="text-xl" numberOfLines={1} testID="home-name">
             {s.displayName}
           </AppText>
+        </View>
+        {/* Wallet: the balance lives in the top bar, like the Shop's header; the bag shows a pack is affordable. */}
+        <View className="ml-3">
+          <WoodPill
+            balance={s.balance}
+            compact
+            canBuy={canBuy}
+            onPress={toShop}
+            testID="home-wallet"
+            accessibilityLabel={`${formatNumber(s.balance)} Wood${canBuy ? ', enough for a pack' : ''}. Open the shop`}
+          />
+        </View>
+        <View className="ml-2.5">
+          <NotificationBell
+            count={s.unread}
+            variant="dot"
+            color="accent"
+            glow
+            onPress={() => router.push('/notifications')}
+            testID="home-notifications"
+          />
         </View>
       </View>
 
@@ -95,7 +125,7 @@ export default function HomeScreen() {
         <View className="absolute inset-0" pointerEvents="none">
           <HomeHeroArt width={heroW} />
         </View>
-        <Card className="absolute left-3 right-3 bottom-3 p-4 rounded-tile flex-row items-center">
+        <Card className="absolute left-3 right-3 bottom-3 p-4 rounded-tile flex-row items-center" style={softShadow}>
           <ProgressRing size={62} stroke={8} progress={pct}>
             <AppText weight="heavy" className="text-xs">
               {Math.min(999, Math.round(pct * 100))}%
@@ -109,7 +139,7 @@ export default function HomeScreen() {
                 : 'steps today · goal reached!'}
             </AppText>
           </View>
-          <ArrowButton testID="home-to-shop" onPress={() => router.navigate('/shop')} />
+          <ArrowButton testID="home-to-shop" onPress={toShop} />
         </Card>
       </View>
 
@@ -131,76 +161,32 @@ export default function HomeScreen() {
 
       {/* stats */}
       <View className="flex-row gap-3 mt-4">
-        <StatTile icon="map-pin" tint="primary" value={(s.stepsToday * KM_PER_STEP).toFixed(1)} label="km" />
-        <StatTile icon="zap" tint="accent" value={formatNumber(s.stepsToday * KCAL_PER_STEP)} label="kcal" />
-        <StatTile
-          icon="clock"
-          tint="sky"
-          value={formatNumber(s.stepsToday / STEPS_PER_ACTIVE_MIN)}
-          label="active min"
-        />
+        {stats.map((st) => (
+          <StatTile key={st.label} {...st} />
+        ))}
       </View>
 
-      {/* activities */}
+      {/* week: the header carries the streak; the card itself is display-only */}
       <View className="mt-7">
-        <SectionHeader title="Your activity" action="See stats" onAction={() => router.navigate('/profile')} />
+        <SectionHeader title="This week" right={days > 0 ? <StreakChip days={days} /> : undefined} />
       </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        className="-mx-6"
-        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 18, gap: 14 }}
-      >
-        <ActivityCard
-          title="Wallet"
-          meta={`${formatNumber(s.balance)} Wood`}
-          metaIcon="credit-card"
-          badge={s.balance >= cheapest ? 'Buy pack' : undefined}
-          bg="bg-accent-soft"
-          onPress={() => router.navigate('/shop')}
-        >
-          <WoodPill balance={s.balance} compact />
-        </ActivityCard>
-
-        <ActivityCard
-          title="Streak"
-          meta={days === 1 ? '1 day' : `${days} days`}
-          metaIcon="trending-up"
-          bg="bg-sky-soft"
-          onPress={() => router.navigate('/profile')}
-        >
-          <MaterialCommunityIcons name="fire" size={56} color={colors.accent.DEFAULT} />
-        </ActivityCard>
-
-        <ActivityCard
-          title="This week"
-          meta={`${formatNumber(week.reduce((a, d) => a + d.steps, 0))} steps`}
-          metaIcon="bar-chart-2"
-          bg="bg-mint-soft"
-          onPress={() => router.navigate('/profile')}
-        >
-          <View className="flex-row items-end h-16 gap-1.5">
-            {week.map((d, i) => (
-              <View
-                key={d.key}
-                className={`w-3 rounded-full ${i === week.length - 1 ? 'bg-primary' : 'bg-mint-deep'}`}
-                style={{ height: 6 + (d.steps / weekMax) * 58 }}
-              />
-            ))}
-          </View>
-        </ActivityCard>
-
-        <ActivityCard
-          title="My city"
-          meta={`${s.cityCount} placed`}
-          metaIcon="map"
-          bg="bg-primary-soft"
-          onPress={() => router.navigate('/city')}
-        >
-          <Feather name="home" size={44} color={colors.primary.dark} />
-        </ActivityCard>
-      </ScrollView>
+      <WeekRings week={week} goal={s.goal} testID="home-week" />
     </Screen>
+  );
+}
+
+function StreakChip({ days }: { days: number }) {
+  return (
+    <View
+      className="flex-row items-center bg-accent-soft rounded-full px-2.5 py-1"
+      accessibilityLabel={`${days}-day streak`}
+      testID="home-streak"
+    >
+      <MaterialCommunityIcons name="fire" size={14} color={colors.accent.DEFAULT} />
+      <AppText weight="strong" className="text-xs ml-1">
+        {days}-day streak
+      </AppText>
+    </View>
   );
 }
 
@@ -224,51 +210,3 @@ function SensorNote({ sensor }: { sensor: string }) {
     </View>
   );
 }
-
-/** "Popular Now" style card: tinted picture area, title, meta row, optional tag. */
-function ActivityCard({
-  title,
-  meta,
-  metaIcon,
-  badge,
-  bg,
-  onPress,
-  children,
-}: {
-  title: string;
-  meta: string;
-  metaIcon: React.ComponentProps<typeof Feather>['name'];
-  badge?: string;
-  bg: string;
-  onPress?: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <Tap onPress={onPress} className="bg-card rounded-card p-2.5" surfaceStyle={CARD_SHADOW}>
-      <View className={`w-40 h-28 rounded-tile items-center justify-center ${bg}`}>{children}</View>
-      {badge && (
-        <View className="absolute top-4 right-4 bg-card rounded-chip px-2 py-1">
-          <AppText weight="strong" tone="accent" className="text-[10px]">
-            {badge}
-          </AppText>
-        </View>
-      )}
-      <View className="px-1.5 pt-2.5 pb-1">
-        <AppText weight="strong" className="text-base">
-          {title}
-        </AppText>
-        <View className="mt-1">
-          <Meta icon={metaIcon} label={meta} />
-        </View>
-      </View>
-    </Tap>
-  );
-}
-
-const CARD_SHADOW = {
-  shadowColor: '#1B7A5A',
-  shadowOpacity: 0.1,
-  shadowRadius: 14,
-  shadowOffset: { width: 0, height: 6 },
-  elevation: 3,
-};

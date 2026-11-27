@@ -80,7 +80,7 @@ appId: host.exp.exponent
 - tapOn:
     id: tab-profile
 - scrollUntilVisible:
-    element: "Steps history"
+    element: "Lifetime steps"
     direction: UP
 - waitForAnimationToEnd
 # The first screen of Profile already includes the collection grid.

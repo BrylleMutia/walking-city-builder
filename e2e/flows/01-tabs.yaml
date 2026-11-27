@@ -3,7 +3,7 @@ appId: host.exp.exponent
 - tapOn:
     id: tab-index
 - assertVisible: "Walker"
-- assertVisible: "Your activity"
+- assertVisible: "This week"
 - takeScreenshot: 01-home
 
 - tapOn:
@@ -23,9 +23,9 @@ appId: host.exp.exponent
     id: tab-profile
 # The tab keeps its scroll position, so return to the top first.
 - scrollUntilVisible:
-    element: "Steps history"
+    element: "Lifetime steps"
     direction: UP
-- assertVisible: "Steps history"
+- assertVisible: "Lifetime steps"
 - takeScreenshot: 01-profile
 - scrollUntilVisible:
     element: "Settings"
