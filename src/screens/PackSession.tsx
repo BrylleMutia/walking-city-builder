@@ -2,9 +2,13 @@ import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
+  FadeIn,
+  Keyframe,
   useAnimatedReaction,
   useAnimatedStyle,
   useDerivedValue,
+  useFrameCallback,
+  useReducedMotion,
   useSharedValue,
   withDelay,
   withRepeat,
@@ -23,15 +27,19 @@ import {
   type StackLayout,
   type StackValues,
 } from '../components/card/CardStack';
+import { dealDurationMs } from '../components/card/summaryDeal';
 import { Glitter } from '../components/effects/Glitter';
+import { RevealBackdrop, RevealOverlay, type RevealFxValues } from '../components/effects/RevealFx';
 import { MAX_TILT_DEG } from '../components/effects/tilt';
 import { BoosterPack } from '../components/pack/BoosterPack';
 import { flapTopY, makePackGeometry } from '../components/pack/packGeometry';
-import { RARITY_COLOR, RARITY_LABEL } from '../data/rarity';
+import { RARITY_COLOR, RARITY_LABEL, rarityTier } from '../data/rarity';
 import type { CardSet } from '../data/sets/types';
 import { PillButton } from '../components/ui/kit';
 import { haptic } from '../lib/haptics';
+import { sound } from '../lib/sound';
 import { rarityFlags, type PackCard } from '../logic/openPack';
+import { REVEAL_FX, teaseFor, trembleAt } from '../logic/revealFx';
 import { colors, fonts } from '../theme/tokens';
 
 interface Props {
@@ -54,6 +62,15 @@ type Phase = 'sealed' | 'opened' | 'reveal' | 'done';
 
 // Plain function reference for worklets to schedule back on the JS thread.
 const hapticTick = haptic.tick;
+/** The last card's flick-out (360 ms in CardStack) finishes before the grid deals in. */
+const DEAL_DELAY_MS = 380;
+/** Rare and up: the rarity word pops in (a touch past full size, then settles). */
+const LABEL_POP = new Keyframe({
+  0: { opacity: 0, transform: [{ scale: 0.85 }] },
+  55: { opacity: 1, transform: [{ scale: 1.06 }], easing: Easing.out(Easing.cubic) },
+  100: { opacity: 1, transform: [{ scale: 1 }], easing: Easing.inOut(Easing.quad) },
+}).duration(260);
+const LABEL_FADE = FadeIn.duration(180);
 
 /** Space kept clear at the bottom for the hint text / buttons. */
 const HUD_SPACE = 110;
@@ -138,11 +155,75 @@ export const PackSession = memo(function PackSession({
   const float = useSharedValue(0);
   const settled = useSharedValue(0);
   const flash = useSharedValue(0);
+  const reduceMotion = useReducedMotion();
+  const dealMs = dealDurationMs(cards.length);
+  // Rarity celebration (RevealFx) and the tease before an epic/legendary.
+  const burst = useSharedValue(0);
+  const burstTier = useSharedValue(0);
+  const persist = useSharedValue(0);
+  const tease = useSharedValue(0);
+  const teaseTier = useSharedValue(0);
+  const trembleAmt = useSharedValue(0);
+  const tremble = useSharedValue(0);
+  const fxClock = useSharedValue(0);
 
   const packTilt = useMemo(() => ({ x: tiltX, y: tiltY }), [tiltX, tiltY]);
   const values: StackValues = useMemo(
-    () => ({ progress, reveal, summary, phase: phaseSV, top, topAnim, packTilt }),
-    [progress, reveal, summary, phaseSV, top, topAnim, packTilt],
+    () => ({ progress, reveal, summary, phase: phaseSV, top, topAnim, packTilt, reduceMotion, burst, tremble }),
+    [progress, reveal, summary, phaseSV, top, topAnim, packTilt, reduceMotion, burst, tremble],
+  );
+  const fxValues: RevealFxValues = useMemo(
+    () => ({ burst, tier: burstTier, persist, tease, teaseTier, clock: fxClock }),
+    [burst, burstTier, persist, tease, teaseTier, fxClock],
+  );
+
+  // The chimes load with the pack screen, so the first reveal plays on time.
+  useEffect(() => {
+    sound.preload();
+  }, []);
+
+  // The reveal effects' clock (only while something moves on its own: see
+  // RevealFx) and the stack's faint wobble while a legendary waits underneath.
+  useFrameCallback((frame) => {
+    'worklet';
+    if (tease.value > 0 || persist.value > 0) fxClock.set(frame.timeSinceFirstFrame);
+    const amt = trembleAmt.value;
+    if (amt === 0) {
+      if (tremble.value !== 0) tremble.set(0);
+      return;
+    }
+    tremble.set(amt * trembleAt(frame.timeSinceFirstFrame / 1000));
+  });
+
+  /**
+   * Card `index` just came to the top: play its rarity's moment (REVEAL_FX:
+   * haptic rhythm, chime, glow/rays/sparkles) and tease the next card if it's
+   * an epic or legendary.
+   */
+  const celebrate = useCallback(
+    (index: number) => {
+      const rarity = cards[index].rarity;
+      const fx = REVEAL_FX[rarity];
+      burstTier.set(rarityTier(rarity));
+      burst.set(0);
+      burst.set(withTiming(1, { duration: fx.burstMs, easing: Easing.linear }));
+      persist.set(withTiming(fx.persistGlow > 0 || fx.persistRays ? 1 : 0, { duration: 400 }));
+      haptic.reveal(rarity);
+      sound.reveal(rarity);
+
+      const next = teaseFor(rarity, cards[index + 1]?.rarity);
+      if (next) teaseTier.set(rarityTier(next));
+      // Comes in after the burst has had its moment; drops at once on the flick.
+      tease.set(
+        next ? withDelay(fx.burstMs * 0.6, withTiming(1, { duration: 700 })) : withTiming(0, { duration: 150 }),
+      );
+      trembleAmt.set(
+        next === 'legendary' && !reduceMotion
+          ? withDelay(fx.burstMs * 0.6 + 300, withTiming(1, { duration: 900 }))
+          : withTiming(0, { duration: 120 }),
+      );
+    },
+    [cards, burst, burstTier, persist, tease, teaseTier, trembleAmt, reduceMotion],
   );
 
   useEffect(() => {
@@ -170,9 +251,8 @@ export const PackSession = memo(function PackSession({
     packEnabled.set(false);
     reveal.set(withSpring(1, { stiffness: 130, damping: 15, mass: 0.9 }));
     setPhase('reveal');
-    haptic.medium();
-    haptic.reveal(cards[0].rarity);
-  }, [cards, packEnabled, phaseSV, reveal]);
+    celebrate(0);
+  }, [celebrate, packEnabled, phaseSV, reveal]);
 
   const handleDismiss = useCallback(
     (index: number) => {
@@ -180,14 +260,32 @@ export const PackSession = memo(function PackSession({
       setTopIndex(next);
       if (next >= cards.length) {
         phaseSV.set(PHASE_DONE);
-        summary.set(withDelay(140, withSpring(1, { stiffness: 110, damping: 15 })));
+        // A linear clock; each card eases its own landing on it (summaryDeal.ts).
+        // No spring: an overshoot here used to throw cards past their slots.
+        summary.set(
+          withDelay(
+            DEAL_DELAY_MS,
+            withTiming(1, { duration: reduceMotion ? 0 : dealMs, easing: Easing.linear }),
+          ),
+        );
         setPhase('done');
-        haptic.success();
+        persist.set(withTiming(0, { duration: 250 }));
+        tease.set(0);
+        trembleAmt.set(0);
       } else {
-        haptic.reveal(cards[next].rarity);
+        celebrate(next);
       }
     },
-    [cards, phaseSV, summary],
+    [cards, phaseSV, summary, reduceMotion, dealMs, celebrate, persist, tease, trembleAmt],
+  );
+
+  /** A soft tick per card landing in the grid; the best (last) one gets its rarity's haptic. */
+  const handleLand = useCallback(
+    (index: number) => {
+      if (index === cards.length - 1) haptic.reveal(cards[index].rarity);
+      else haptic.tick();
+    },
+    [cards],
   );
 
   // Haptic "teeth" while tearing: one tick per ~8% of travel.
@@ -279,9 +377,21 @@ export const PackSession = memo(function PackSession({
   const best = cards[cards.length - 1].rarity;
   const hasFoil = cards.some((c) => c.foil);
   const current = cards[Math.min(topIndex, cards.length - 1)];
+  // Where the top card of the revealed stack sits (CardStack centres cards on the screen).
+  const fxLayout = {
+    width,
+    height,
+    cx: width / 2,
+    cy: height / 2 + stack.stackDy,
+    cardW: stack.cardW,
+    cardH: stack.cardW * CARD_ASPECT,
+  };
 
   return (
     <View style={StyleSheet.absoluteFill}>
+      {(phase === 'reveal' || phase === 'done') && (
+        <RevealBackdrop values={fxValues} {...fxLayout} reduceMotion={reduceMotion} />
+      )}
       {/* cards (and the pack's back wall) sit behind the wrapper front */}
       <Animated.View style={[StyleSheet.absoluteFill, cardsStyle]} pointerEvents="box-none">
         <Animated.View
@@ -303,8 +413,12 @@ export const PackSession = memo(function PackSession({
           values={values}
           onPullOut={pullOut}
           onDismiss={handleDismiss}
+          onLand={handleLand}
         />
       </Animated.View>
+      {(phase === 'reveal' || phase === 'done') && (
+        <RevealOverlay values={fxValues} {...fxLayout} reduceMotion={reduceMotion} />
+      )}
 
       <Animated.View style={[StyleSheet.absoluteFill, packStyle]} pointerEvents="box-none">
         <View style={{ position: 'absolute', left: packLeft, top: packTop }}>
@@ -348,10 +462,14 @@ export const PackSession = memo(function PackSession({
         )}
         {phase === 'reveal' && (
           <>
-            <Text style={[styles.rarity, { color: RARITY_COLOR[current.rarity].dark }]}>
+            <Animated.Text
+              key={topIndex}
+              entering={REVEAL_FX[current.rarity].pop && !reduceMotion ? LABEL_POP : LABEL_FADE}
+              style={[styles.rarity, { color: RARITY_COLOR[current.rarity].dark }]}
+            >
               {RARITY_LABEL[current.rarity].toUpperCase()}
               {current.foil ? '  ✦ FOIL' : ''}
-            </Text>
+            </Animated.Text>
             <Text style={styles.hint}>
               Card {Math.min(topIndex + 1, cards.length)} of {cards.length} · drag to tilt · flick
               or tap for next
@@ -359,7 +477,11 @@ export const PackSession = memo(function PackSession({
           </>
         )}
         {phase === 'done' && (
-          <View style={styles.actions}>
+          // Fades in as the last card lands, so the buttons don't compete with the deal.
+          <Animated.View
+            style={styles.actions}
+            entering={FadeIn.delay(reduceMotion ? 0 : DEAL_DELAY_MS + dealMs - 120).duration(200)}
+          >
             {onOpenAnother && (
               // Secondary on purpose: placing the pulls is the main next step, spending again is optional.
               <PillButton
@@ -372,7 +494,7 @@ export const PackSession = memo(function PackSession({
               />
             )}
             <PillButton label="Go to my city" icon="check" onPress={onDone} testID="pack-done" />
-          </View>
+          </Animated.View>
         )}
       </View>
     </View>

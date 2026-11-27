@@ -3,12 +3,13 @@ import {
   Circle,
   LinearGradient,
   RadialGradient,
+  Rect,
   RoundedRect,
   vec,
 } from '@shopify/react-native-skia';
 import React, { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import type { SharedValue } from 'react-native-reanimated';
+import { useDerivedValue, type SharedValue } from 'react-native-reanimated';
 
 import { RARITY_COLOR, RARITY_LABEL } from '../../data/rarity';
 import type { PackCard } from '../../logic/openPack';
@@ -23,6 +24,12 @@ interface Props {
   width: number;
   tiltX: SharedValue<number>;
   tiltY: SharedValue<number>;
+  /**
+   * Position of a one-off light band crossing the face on reveal (rare and
+   * up): 0 = just off the top-left corner, 1 = just past the bottom-right.
+   * Outside 0..1 nothing is drawn.
+   */
+  sweep?: SharedValue<number>;
 }
 
 const PAPER = '#FFF8EC';
@@ -33,7 +40,7 @@ const INK = '#2B2118';
  * scale and 3D rotation are applied by the parent; this only needs the tilt to
  * place the light reflection.
  */
-export const Card = memo(function Card({ card, width, tiltX, tiltY }: Props) {
+export const Card = memo(function Card({ card, width, tiltX, tiltY, sweep }: Props) {
   const height = width * CARD_ASPECT;
   const colors = RARITY_COLOR[card.rarity];
   const radius = width * 0.065;
@@ -135,9 +142,34 @@ export const Card = memo(function Card({ card, width, tiltX, tiltY }: Props) {
         foil={card.foil}
         rest={0.06}
       />
+      {sweep && <Sweep width={width} height={height} sweep={sweep} />}
     </View>
   );
 });
+
+const SWEEP_COLORS = ['rgba(255,255,255,0)', 'rgba(255,255,255,0.55)', 'rgba(255,255,255,0)'];
+
+/** The reveal's light band: a soft white stripe sliding diagonally across the card once. */
+function Sweep({ width, height, sweep }: { width: number; height: number; sweep: SharedValue<number> }) {
+  // The band travels along the diagonal, from before the top-left corner to past the bottom-right.
+  const band = width * 0.35;
+  const start = useDerivedValue(() => {
+    const d = -band + sweep.value * (width + height * 0.6 + band * 2);
+    return vec(d - band, d * 0.6 - band * 0.6);
+  });
+  const end = useDerivedValue(() => {
+    const d = -band + sweep.value * (width + height * 0.6 + band * 2);
+    return vec(d + band, d * 0.6 + band * 0.6);
+  });
+  const opacity = useDerivedValue(() => (sweep.value > 0 && sweep.value < 1 ? 1 : 0));
+  return (
+    <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Rect x={0} y={0} width={width} height={height} opacity={opacity}>
+        <LinearGradient start={start} end={end} colors={SWEEP_COLORS} />
+      </Rect>
+    </Canvas>
+  );
+}
 
 const styles = StyleSheet.create({
   card: {

@@ -10,6 +10,7 @@ import Animated, {
   Easing,
   Extrapolation,
   interpolate,
+  useAnimatedReaction,
   useAnimatedStyle,
   useDerivedValue,
   useSharedValue,
@@ -20,6 +21,7 @@ import Animated, {
 import { scheduleOnRN } from 'react-native-worklets';
 
 import type { PackCard } from '../../logic/openPack';
+import { REVEAL_FX } from '../../logic/revealFx';
 import {
   MAX_TILT_DEG,
   TILT_RELEASE_SPRING,
@@ -28,6 +30,14 @@ import {
   type Tilt,
 } from '../effects/tilt';
 import { CARD_ASPECT, Card } from './Card';
+import {
+  DEAL_LANDED,
+  DEAL_LEAN,
+  DEAL_RISE,
+  DEAL_START_SCALE,
+  dealPop,
+  dealProgress,
+} from './summaryDeal';
 
 export const PHASE_PACK = 0;
 export const PHASE_REVEAL = 1;
@@ -60,7 +70,17 @@ export interface StackValues {
   /** Spring-smoothed `top`, so the stack shuffles up with a bounce. */
   topAnim: SharedValue<number>;
   packTilt: Tilt;
+  /** The phone asks for less motion: summary cards just appear (no rise, lean or pop). */
+  reduceMotion: boolean;
+  /** 0 → 1 over the top card's reveal burst (see RevealFx). */
+  burst: SharedValue<number>;
+  /** Degrees the whole stack wobbles while a legendary waits underneath (0 otherwise). */
+  tremble: SharedValue<number>;
 }
+
+/** Part of the burst during which the light band crosses a rare+ card. */
+const SWEEP_FROM = 0.12;
+const SWEEP_SPAN = 0.5;
 
 interface StackCardProps {
   card: PackCard;
@@ -70,6 +90,7 @@ interface StackCardProps {
   values: StackValues;
   onPullOut: () => void;
   onDismiss: (index: number) => void;
+  onLand: (index: number) => void;
 }
 
 const POP_SPRING = { stiffness: 210, damping: 13, mass: 0.7 } as const;
@@ -88,6 +109,7 @@ const StackCard = memo(function StackCard({
   values: V,
   onPullOut,
   onDismiss,
+  onLand,
 }: StackCardProps) {
   const cardH = L.cardW * CARD_ASPECT;
   const tiltX = useSharedValue(0);
@@ -98,6 +120,14 @@ const StackCard = memo(function StackCard({
   const flyY = useSharedValue(0);
   const flyRot = useSharedValue(0);
   const active = useSharedValue(false);
+
+  // Rare and up: a light band crosses the face once, while this card's burst plays.
+  const sweeps = REVEAL_FX[card.rarity].sweep;
+  const sweep = useDerivedValue(() =>
+    sweeps && V.top.value === index && V.phase.value === PHASE_REVEAL
+      ? (V.burst.value - SWEEP_FROM) / SWEEP_SPAN
+      : -1,
+  );
 
   // While in the pack, the card's reflection follows the pack's tilt.
   const glareX = useDerivedValue(() => tiltX.value + V.packTilt.x.value * (1 - V.reveal.value));
@@ -169,6 +199,14 @@ const StackCard = memo(function StackCard({
 
   const gesture = useCompetingGestures(pan, tap);
 
+  // One haptic per card as it lands in the summary grid.
+  useAnimatedReaction(
+    () => V.summary.value > 0 && dealProgress(V.summary.value, index, count) >= DEAL_LANDED,
+    (landed, before) => {
+      if (landed && !before) scheduleOnRN(onLand, index);
+    },
+  );
+
   const style = useAnimatedStyle(() => {
     const r = V.reveal.value;
     const s = V.summary.value;
@@ -189,15 +227,34 @@ const StackCard = memo(function StackCard({
     let y = lerp(packY, stackY, r);
     let scale = lerp(L.packScale, stackScale, r);
     let rot = lerp(packRot, stackRot, r);
+    // The cards still in the stack stir before a legendary.
+    if (index >= V.top.value) rot += V.tremble.value;
 
-    // 3) flicked away, then 4) gathered into the summary grid
-    const slot = L.slots[index];
-    x = lerp(x + flyX.value + dragX.value, slot.x, s);
-    y = lerp(y + flyY.value + dragY.value, slot.y, s);
-    rot = lerp(rot + flyRot.value, 0, s);
-    scale = lerp(scale, L.miniScale, s);
+    // 3) flicked away
+    x += flyX.value + dragX.value;
+    y += flyY.value + dragY.value;
+    rot += flyRot.value;
+    let opacity = 1;
+
+    // 4) dealt into the summary grid *in place*: the card appears at its slot
+    // (fading up from below, settling from a slight lean) instead of flying
+    // back from wherever it was flicked, which crossed the whole screen. The
+    // jump to the slot happens while it's invisible (t = 0).
+    if (s > 0) {
+      const slot = L.slots[index];
+      const t = dealProgress(s, index, count);
+      const calm = V.reduceMotion ? 1 : t;
+      x = slot.x;
+      y = slot.y + (1 - calm) * DEAL_RISE;
+      rot = (index % 2 === 0 ? -DEAL_LEAN : DEAL_LEAN) * (1 - calm);
+      // The last card is the pack's best (cards are sorted by rarity): it swells a touch.
+      const pop = index === count - 1 && !V.reduceMotion ? dealPop(t) : 1;
+      scale = L.miniScale * (DEAL_START_SCALE + (1 - DEAL_START_SCALE) * calm) * pop;
+      opacity = t;
+    }
 
     return {
+      opacity,
       transform: [
         { translateX: x },
         { translateY: y },
@@ -225,7 +282,7 @@ const StackCard = memo(function StackCard({
           style,
         ]}
       >
-        <Card card={card} width={L.cardW} tiltX={glareX} tiltY={glareY} />
+        <Card card={card} width={L.cardW} tiltX={glareX} tiltY={glareY} sweep={sweeps ? sweep : undefined} />
       </Animated.View>
     </GestureDetector>
   );
@@ -237,6 +294,8 @@ interface Props {
   values: StackValues;
   onPullOut: () => void;
   onDismiss: (index: number) => void;
+  /** A card has landed in the summary grid (for its haptic). */
+  onLand: (index: number) => void;
 }
 
 /**
@@ -250,6 +309,7 @@ export const CardStack = memo(function CardStack({
   values,
   onPullOut,
   onDismiss,
+  onLand,
 }: Props) {
   // Render back-to-front so card 0 (top of the stack) is drawn last.
   const order = cards.map((_, i) => cards.length - 1 - i);
@@ -265,6 +325,7 @@ export const CardStack = memo(function CardStack({
           values={values}
           onPullOut={onPullOut}
           onDismiss={onDismiss}
+          onLand={onLand}
         />
       ))}
     </>
