@@ -12,6 +12,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["expo", "start", "--go", "--port", "8082"],
       "port": 8082
+    },
+    {
+      "name": "artifacts",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8765", "--bind", "127.0.0.1", "--directory", "e2e-artifacts"],
+      "port": 8765
     }
   ]
 }

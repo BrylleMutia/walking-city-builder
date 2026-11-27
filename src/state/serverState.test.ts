@@ -22,6 +22,33 @@ const server: ServerState = {
   ],
 };
 
+describe('applyServerState with several cities', () => {
+  it('takes the cities, the active one and what stands in the others', () => {
+    const multi: ServerState = {
+      ...server,
+      city: [{ x: 1, y: 2, item_id: 'cobblestone-street' }],
+      cities: [
+        { id: 'a', name: null, position: 0, lots: 1 },
+        { id: 'b', name: 'Harbor Side', position: 1, lots: 2 },
+      ],
+      city_id: 'b',
+      placed: { 'cobblestone-street': 3, bakery: 1, 'not-in-this-app-version': 2 },
+    };
+    const s = applyServerState(initialData('2026-11-17'), multi, '2026-11-17');
+    expect(s.activeCityId).toBe('b');
+    expect(s.cities.map((c) => c.name)).toEqual([null, 'Harbor Side']);
+    // 3 cobblestones placed in all, 1 here: 2 elsewhere.
+    expect(s.placedElsewhere).toEqual({ 'cobblestone-street': 2, bakery: 1 });
+  });
+
+  it('leaves the city fields alone when an older server sends none', () => {
+    const local = { ...initialData('2026-11-17'), cities: [{ id: 'a', name: null, position: 0, lots: 0 }], activeCityId: 'a' };
+    const s = applyServerState(local, server, '2026-11-17');
+    expect(s.activeCityId).toBe('a');
+    expect(s.cities).toHaveLength(1);
+  });
+});
+
 describe('applyServerState', () => {
   it('takes balances, steps, inventory and city from the server', () => {
     const local = { ...initialData('2026-11-17'), stepsToday: 99, balance: 1 };

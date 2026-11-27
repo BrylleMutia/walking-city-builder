@@ -91,7 +91,7 @@ export function NameStep({ mode, onDone }: { mode: 'onboarding' | 'edit'; onDone
         </View>
         <View className="ml-3 flex-1">
           <AppText tone="muted" className="text-xs">
-            Let’s do this
+            Let’s do this!
           </AppText>
           <AppText weight="heavy" className="text-lg" numberOfLines={1} testID="name-preview">
             {name ?? DEFAULT_NAME}

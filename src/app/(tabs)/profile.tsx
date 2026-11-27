@@ -15,11 +15,10 @@ import { Tap } from '../../components/ui/Tap';
 import { toast } from '../../components/ui/toast';
 import { RARITY_COLOR } from '../../data/rarity';
 import { PLAYABLE_SETS } from '../../data/sets';
-import { foilsOwned, recentDays, streak, uniqueOwned } from '../../state/gameLogic';
+import { foilsOwned, streak, uniqueOwned } from '../../state/gameLogic';
 import { useGameStore } from '../../state/useGameStore';
 import { colors } from '../../theme/tokens';
 
-const DAY = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const CLOUD_LABEL = {
   connecting: 'Connecting…',
   online: 'Connected',
@@ -48,6 +47,7 @@ export default function ProfileScreen() {
       pendingCount: st.pendingCity.length,
       sensor: st.sensor,
       hapticsOn: st.hapticsOn,
+      soundOn: st.soundOn,
       forceLegendary: st.forceLegendary,
       forceFoil: st.forceFoil,
       addSteps: st.addSteps,
@@ -64,8 +64,6 @@ export default function ProfileScreen() {
   // Screen padding 24×2, card padding 12×2, 4 gaps of 8 between 5 columns.
   const tile = Math.floor((width - 48 - 24 - 4 * GRID_GAP) / GRID_COLUMNS);
   const today = useMemo(() => new Date(), []);
-  const week = useMemo(() => recentDays(s, today), [s, today]);
-  const peak = Math.max(s.goal, ...week.map((d) => d.steps));
   const level = levelOf(s.lifetimeSteps);
   const levelPct = (s.lifetimeSteps % 10000) / 10000;
   const owned = uniqueOwned(s);
@@ -131,42 +129,6 @@ export default function ProfileScreen() {
         <MiniStat value={`${s.packsOpened}`} label="Packs opened" />
       </View>
 
-      {/* history */}
-      <View className="mt-7">
-        <SectionHeader title="Steps history" action="Last 7 days" />
-      </View>
-      <Card className="p-4">
-        <View className="flex-row items-end justify-between" style={{ height: 130 }}>
-          {week.map((d, i) => {
-            const isToday = i === week.length - 1;
-            const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() - (week.length - 1 - i));
-            return (
-              <View key={d.key} className="items-center flex-1">
-                <AppText tone="muted" className="text-[10px] mb-1">
-                  {d.steps >= 1000 ? `${(d.steps / 1000).toFixed(1)}k` : d.steps || ''}
-                </AppText>
-                <View
-                  className={`w-5 rounded-full ${isToday ? 'bg-primary' : d.steps >= s.goal ? 'bg-primary-dark' : 'bg-mint-deep'}`}
-                  style={{ height: 6 + (d.steps / peak) * 92 }}
-                />
-                <AppText weight={isToday ? 'heavy' : 'semi'} tone={isToday ? 'ink' : 'muted'} className="text-xs mt-2">
-                  {DAY[date.getDay()]}
-                </AppText>
-              </View>
-            );
-          })}
-        </View>
-        <View className="flex-row items-center mt-3 pt-3 border-t border-line">
-          <View className="w-2 h-2 rounded-full bg-primary-dark mr-1.5" />
-          <AppText tone="muted" className="text-xs flex-1">
-            Goal reached
-          </AppText>
-          <AppText weight="strong" className="text-xs">
-            Daily goal {formatNumber(s.goal)}
-          </AppText>
-        </View>
-      </Card>
-
       {/* collection */}
       <View className="mt-7">
         <SectionHeader title="Collection" action={`${owned}/${total} · ${foilsOwned(s)} foil`} />
@@ -230,6 +192,15 @@ export default function ProfileScreen() {
             thumbColor="#FFFFFF"
           />
         </Row>
+        <Row icon="volume-2" label="Sound effects">
+          <Switch
+            value={s.soundOn}
+            onValueChange={(v) => s.setSetting('soundOn', v)}
+            trackColor={{ true: colors.primary.DEFAULT, false: colors.line }}
+            thumbColor="#FFFFFF"
+            testID="sound-toggle"
+          />
+        </Row>
         <Row icon="user" label="Account">
           <Tap
             onPress={() => router.push('/save-progress')}
@@ -285,6 +256,7 @@ export default function ProfileScreen() {
           <Switch
             value={s.forceLegendary}
             onValueChange={(v) => s.setSetting('forceLegendary', v)}
+            testID="force-legendary"
             trackColor={{ true: colors.accent.DEFAULT, false: colors.line }}
             thumbColor="#FFFFFF"
           />

@@ -98,7 +98,7 @@ appId: host.exp.exponent
 
 # Back in the game with the new goal.
 - extendedWaitUntil:
-    visible: "Let.s do this"
+    visible: "Let.s do this!?"
     timeout: 10000
 - assertVisible:
     id: home-name

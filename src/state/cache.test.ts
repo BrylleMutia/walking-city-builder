@@ -2,6 +2,8 @@ import { CACHE_VERSION, CITY_SHIFT, migrateCache, sanitizeCache, toCache } from 
 import { initialData } from './gameLogic';
 
 const TODAY = '2026-11-17';
+const HOME = '11111111-1111-4111-8111-111111111111';
+const HARBOR = '22222222-2222-4222-8222-222222222222';
 
 describe('sanitizeCache', () => {
   it('turns garbage into a fresh-player cache', () => {
@@ -9,6 +11,7 @@ describe('sanitizeCache', () => {
       expect(sanitizeCache(raw, TODAY)).toEqual({
         ...initialData(TODAY),
         hapticsOn: true,
+        soundOn: true,
         forceLegendary: false,
         forceFoil: false,
         pendingCity: [],
@@ -16,6 +19,9 @@ describe('sanitizeCache', () => {
         profilePending: false,
         avatarId: 'sprout',
         haul: { steps: 0, wood: 0 },
+        cityTiles: {},
+        notifications: [],
+        notificationsReadPending: [],
       });
     }
   });
@@ -31,16 +37,35 @@ describe('sanitizeCache', () => {
       city: [{ itemId: 'bakery' as const, x: 2, y: 3 }],
       packsOpened: 2,
       hapticsOn: false,
+      soundOn: false,
       forceLegendary: true,
       forceFoil: false,
       pendingCity: [
-        { op: 'place' as const, itemId: 'cobblestone-street' as const, x: 0, y: 0 },
-        { op: 'remove' as const, x: 2, y: 3 },
+        { cityId: HOME, op: 'place' as const, itemId: 'cobblestone-street' as const, x: 0, y: 0 },
+        { cityId: null, op: 'remove' as const, x: 2, y: 3 },
       ],
       onboarded: true,
       profilePending: true,
       avatarId: 'curly' as const,
       haul: { steps: 420, wood: 44 },
+      cities: [
+        { id: HOME, name: null, position: 0, lots: 2 },
+        { id: HARBOR, name: 'Harbor Side', position: 1, lots: 1 },
+      ],
+      activeCityId: HOME,
+      placedElsewhere: { 'lamp-post': 1 },
+      cityTiles: { [HARBOR]: [{ itemId: 'lamp-post' as const, x: 4, y: 4 }] },
+      notifications: [
+        {
+          id: '00000000-0000-4000-8000-000000000001',
+          kind: 'welcome',
+          title: 'Welcome to Stridewood!',
+          body: 'Walk, collect, build.',
+          createdAt: '2026-11-16T04:00:00Z',
+          readAt: '2026-11-16T05:00:00Z',
+        },
+      ],
+      notificationsReadPending: ['00000000-0000-4000-8000-000000000001'],
     };
     expect(sanitizeCache(good, TODAY)).toEqual(good);
   });
@@ -73,7 +98,7 @@ describe('sanitizeCache', () => {
     expect(out.history).toEqual({ '2026-11-15': 300 });
     expect(out.collection).toEqual({ bakery: { count: 2, foil: 0 } });
     expect(out.city).toEqual([{ itemId: 'bakery', x: 1, y: 1 }]);
-    expect(out.pendingCity).toEqual([{ op: 'remove', x: 3, y: 3 }]);
+    expect(out.pendingCity).toEqual([{ cityId: null, op: 'remove', x: 3, y: 3 }]);
     expect(out.hapticsOn).toBe(true);
   });
 
@@ -89,7 +114,7 @@ describe('sanitizeCache', () => {
       },
       TODAY,
     );
-    expect(out.pendingCity).toEqual([{ op: 'move', fx: 1, fy: 1, tx: 15, ty: 15 }]);
+    expect(out.pendingCity).toEqual([{ cityId: null, op: 'move', fx: 1, fy: 1, tx: 15, ty: 15 }]);
   });
 
   it('keeps a valid name and falls back to the default for a bad one', () => {
@@ -123,6 +148,39 @@ describe('sanitizeCache', () => {
   it('resets a broken haul', () => {
     expect(sanitizeCache({ haul: 'lots' }, TODAY).haul).toEqual({ steps: 0, wood: 0 });
     expect(sanitizeCache({ haul: { steps: -4, wood: 12.8 } }, TODAY).haul).toEqual({ steps: 0, wood: 12 });
+  });
+
+  it('keeps only well-formed cities, and cached tiles of known, inactive ones', () => {
+    const out = sanitizeCache(
+      {
+        cities: [
+          { id: HOME, name: '', position: 0, lots: 3 },
+          { id: HARBOR, name: 'x'.repeat(25), position: 1, lots: -2 },
+          { id: HARBOR, name: 'Twice', position: 2, lots: 0 },
+          { id: 'not-a-uuid', name: 'Bad', position: 3, lots: 0 },
+        ],
+        activeCityId: 'not-a-uuid',
+        placedElsewhere: { 'lamp-post': 2, bakery: 0, 'old-item': 4 },
+        cityTiles: {
+          [HOME]: [{ itemId: 'bakery', x: 1, y: 1 }],
+          [HARBOR]: [{ itemId: 'lamp-post', x: 1, y: 1 }, { itemId: 'lamp-post', x: 1, y: 1 }],
+          'not-a-uuid': [{ itemId: 'bakery', x: 1, y: 1 }],
+        },
+      },
+      TODAY,
+    );
+    expect(out.cities).toEqual([
+      { id: HOME, name: null, position: 0, lots: 3 },
+      { id: HARBOR, name: null, position: 1, lots: 0 },
+    ]);
+    expect(out.activeCityId).toBeNull();
+    expect(out.placedElsewhere).toEqual({ 'lamp-post': 2 });
+    // Unknown cities dropped; overlapping tiles fitted. (The active one would be dropped too.)
+    expect(out.cityTiles).toEqual({
+      [HOME]: [{ itemId: 'bakery', x: 1, y: 1 }],
+      [HARBOR]: [{ itemId: 'lamp-post', x: 1, y: 1 }],
+    });
+    expect(sanitizeCache({ cities: [{ id: HOME, position: 0 }], activeCityId: HOME, cityTiles: { [HOME]: [] } }, TODAY).cityTiles).toEqual({});
   });
 
   it('treats a missing or broken onboarding flag as "not onboarded"', () => {
@@ -172,8 +230,8 @@ describe('migrateCache', () => {
       { itemId: 'bakery', x: 13, y: 13 },
     ]);
     expect(out.pendingCity).toEqual([
-      { op: 'place', itemId: 'bakery', x: 6, y: 7 },
-      { op: 'remove', x: 2, y: 2 },
+      { cityId: null, op: 'place', itemId: 'bakery', x: 6, y: 7 },
+      { cityId: null, op: 'remove', x: 2, y: 2 },
     ]);
     // Already on the new lawn: no second shift.
     expect(migrateCache(out, CACHE_VERSION, TODAY).city).toEqual(out.city);
@@ -185,6 +243,43 @@ describe('migrateCache', () => {
     expect(migrateCache(v3, 3, TODAY).haul).toEqual({ steps: 0, wood: 0 });
     // Already Wood: no second conversion.
     expect(migrateCache({ ...v3, balance: 600 }, CACHE_VERSION, TODAY).balance).toBe(600);
+  });
+
+  it('puts a single-city cache (v4) and its queued changes in the first city', () => {
+    const v4 = {
+      ...initialData(TODAY),
+      collection: { bakery: { count: 1, foil: 0 } },
+      city: [{ itemId: 'bakery', x: 3, y: 3 }],
+      pendingCity: [{ op: 'place', itemId: 'bakery', x: 3, y: 3 }],
+    };
+    const out = migrateCache(v4, 4, TODAY);
+    expect(out.city).toEqual([{ itemId: 'bakery', x: 3, y: 3 }]);
+    expect(out.pendingCity).toEqual([{ cityId: null, op: 'place', itemId: 'bakery', x: 3, y: 3 }]);
+    expect(out).toMatchObject({ cities: [], activeCityId: null, placedElsewhere: {}, cityTiles: {} });
+  });
+
+  it('adds empty notifications to a v5 cache and keeps valid cached ones', () => {
+    const v5 = { ...initialData(TODAY), haul: { steps: 0, wood: 0 } };
+    expect(migrateCache(v5, 5, TODAY)).toMatchObject({ notifications: [], notificationsReadPending: [] });
+    const notice = {
+      id: '00000000-0000-4000-8000-000000000001',
+      kind: 'welcome',
+      title: 'Welcome to Stridewood!',
+      body: 'Walk, collect, build.',
+      createdAt: '2026-11-25T04:00:00Z',
+      readAt: null,
+    };
+    const out = sanitizeCache(
+      { notifications: [notice, { id: 'bad' }], notificationsReadPending: [notice.id, 'bad'] },
+      TODAY,
+    );
+    expect(out.notifications).toEqual([notice]);
+    expect(out.notificationsReadPending).toEqual([notice.id]);
+  });
+
+  it('turns sound on for a v6 cache and keeps a saved choice', () => {
+    expect(migrateCache({ ...initialData(TODAY) }, 6, TODAY).soundOn).toBe(true);
+    expect(migrateCache({ ...initialData(TODAY), soundOn: false }, CACHE_VERSION, TODAY).soundOn).toBe(false);
   });
 
   it('round-trips through toCache', () => {

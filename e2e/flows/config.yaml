@@ -4,6 +4,7 @@ executionOrder:
   continueOnFailure: false
   flowsOrder:
     - 00-reset
+    - 11-notifications
     - 01-tabs
     - 02-steps
     - 03-buy-and-open
@@ -11,5 +12,6 @@ executionOrder:
     - 05-persistence
     - 08-city-top-view
     - 09-all-packs
+    - 10-cities
     - 06-components
     - 07-onboarding

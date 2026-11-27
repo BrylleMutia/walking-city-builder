@@ -31,9 +31,14 @@ jest.mock('./backend', () => {
     placeItem: jest.fn(),
     removeItem: jest.fn(),
     moveItem: jest.fn(),
+    createCity: jest.fn(),
+    renameCity: jest.fn(),
+    deleteCity: jest.fn(),
+    fetchCity: jest.fn(),
     buyPack: jest.fn(),
     updateProfile: jest.fn(),
     resetProgress: jest.fn(),
+    markNotificationsRead: jest.fn(),
     subscribePlayer: jest.fn(async () => () => {}),
   };
 });
@@ -52,12 +57,12 @@ beforeEach(() => {
   serverCity = [];
   mocked.ensureSession.mockResolvedValue('user-1');
   mocked.syncSteps.mockResolvedValue({ day: '', steps: 0, credited: 0, wood: 0, balance: 3000 });
-  mocked.placeItem.mockImplementation(async (item_id, x, y) => {
+  mocked.placeItem.mockImplementation(async (_city, item_id, x, y) => {
     if (serverCity.some((t) => t.x === x && t.y === y)) {
       throw new (api.BackendError as unknown as new (r: string) => Error)('tile_occupied');
     }
     serverCity.push({ x, y, item_id });
-    return { x, y, item_id };
+    return { city_id: 'city-1', x, y, item_id };
   });
   mocked.fetchState.mockImplementation(async () => ({
     profile: null,
@@ -74,17 +79,20 @@ beforeEach(() => {
     onboarded: true,
     haul: { steps: 0, wood: 0 },
     showHaul: false,
+    cityTiles: {},
+    notifications: [],
+    notificationsReadPending: [],
   });
 });
 
 it('queues a placement made offline and uploads it on reconnect', async () => {
   expect(useGameStore.getState().placeItem('bakery', 2, 3)).toBe(true);
   expect(mocked.placeItem).not.toHaveBeenCalled();
-  expect(useGameStore.getState().pendingCity).toEqual([{ op: 'place', itemId: 'bakery', x: 2, y: 3 }]);
+  expect(useGameStore.getState().pendingCity).toEqual([{ cityId: null, op: 'place', itemId: 'bakery', x: 2, y: 3 }]);
 
   await useGameStore.getState().connect();
 
-  expect(mocked.placeItem).toHaveBeenCalledWith('bakery', 2, 3);
+  expect(mocked.placeItem).toHaveBeenCalledWith(null, 'bakery', 2, 3);
   const s = useGameStore.getState();
   expect(s.cloud).toBe('online');
   expect(s.pendingCity).toEqual([]);
@@ -101,7 +109,7 @@ it('queues a placement whose request is cut off by a lost connection', async () 
   const s = useGameStore.getState();
   expect(s.cloud).toBe('offline');
   expect(s.city).toEqual([{ itemId: 'lamp-post', x: 0, y: 0 }]);
-  expect(s.pendingCity).toEqual([{ op: 'place', itemId: 'lamp-post', x: 0, y: 0 }]);
+  expect(s.pendingCity).toEqual([{ cityId: null, op: 'place', itemId: 'lamp-post', x: 0, y: 0 }]);
 });
 
 it('keeps queued changes when the reconnect attempt is still offline', async () => {
@@ -133,7 +141,7 @@ it('replays placements and removals in order', async () => {
   store.placeItem('bakery', 1, 1);
   store.removeAt(1, 1);
   store.placeItem('bakery', 2, 2);
-  mocked.removeItem.mockImplementation(async (x, y) => {
+  mocked.removeItem.mockImplementation(async (_city, x, y) => {
     serverCity = serverCity.filter((t) => !(t.x === x && t.y === y));
     return { x, y, item_id: 'bakery' };
   });
@@ -141,15 +149,15 @@ it('replays placements and removals in order', async () => {
   await useGameStore.getState().connect();
 
   expect(mocked.placeItem.mock.calls).toEqual([
-    ['bakery', 1, 1],
-    ['bakery', 2, 2],
+    [null, 'bakery', 1, 1],
+    [null, 'bakery', 2, 2],
   ]);
-  expect(mocked.removeItem).toHaveBeenCalledWith(1, 1);
+  expect(mocked.removeItem).toHaveBeenCalledWith(null, 1, 1);
   expect(useGameStore.getState().city).toEqual([{ itemId: 'bakery', x: 2, y: 2 }]);
 });
 
 describe('moving objects', () => {
-  const moveOnServer = async (fx: number, fy: number, tx: number, ty: number) => {
+  const moveOnServer = async (_city: string | null, fx: number, fy: number, tx: number, ty: number) => {
     const from = serverCity.find((t) => t.x === fx && t.y === fy);
     if (!from) throw new (api.BackendError as unknown as new (r: string) => Error)('tile_empty');
     const to = serverCity.find((t) => t.x === tx && t.y === ty);
@@ -181,18 +189,18 @@ describe('moving objects', () => {
       { itemId: 'lamp-post', x: 1, y: 1 },
     ]);
     await flush();
-    expect(mocked.moveItem).toHaveBeenCalledWith(1, 1, 2, 2);
+    expect(mocked.moveItem).toHaveBeenCalledWith(null, 1, 1, 2, 2);
     expect(useGameStore.getState().pendingCity).toEqual([]);
   });
 
   it('queues a move made offline and replays it on reconnect', async () => {
     useGameStore.getState().moveItem(1, 1, 5, 5);
     expect(mocked.moveItem).not.toHaveBeenCalled();
-    expect(useGameStore.getState().pendingCity).toEqual([{ op: 'move', fx: 1, fy: 1, tx: 5, ty: 5 }]);
+    expect(useGameStore.getState().pendingCity).toEqual([{ cityId: null, op: 'move', fx: 1, fy: 1, tx: 5, ty: 5 }]);
 
     await useGameStore.getState().connect();
 
-    expect(mocked.moveItem).toHaveBeenCalledWith(1, 1, 5, 5);
+    expect(mocked.moveItem).toHaveBeenCalledWith(null, 1, 1, 5, 5);
     expect(useGameStore.getState().pendingCity).toEqual([]);
     expect(useGameStore.getState().city).toEqual(
       expect.arrayContaining([{ itemId: 'flower-kiosk', x: 5, y: 5 }]),
@@ -239,7 +247,7 @@ describe('live sync', () => {
     await flush();
     let answer!: () => void;
     mocked.placeItem.mockImplementationOnce(
-      (item_id, x, y) => new Promise((r) => (answer = () => r({ x, y, item_id }))),
+      (_city, item_id, x, y) => new Promise((r) => (answer = () => r({ city_id: 'city-1', x, y, item_id }))),
     );
 
     useGameStore.getState().placeItem('bakery', 3, 3);
@@ -336,6 +344,98 @@ describe('step goal', () => {
   });
 });
 
+const WELCOME = {
+  id: '00000000-0000-4000-8000-000000000001',
+  kind: 'welcome',
+  title: 'Welcome to Stridewood!',
+  body: 'Walk, collect, build.',
+  createdAt: '2026-11-25T04:00:00Z',
+  readAt: null as string | null,
+};
+const serverWelcome = (readAt: string | null = null) => ({
+  id: WELCOME.id,
+  kind: WELCOME.kind,
+  title: WELCOME.title,
+  body: WELCOME.body,
+  created_at: WELCOME.createdAt,
+  read_at: readAt,
+});
+
+describe('notifications', () => {
+  let serverRead: string | null;
+  beforeEach(() => {
+    serverRead = null;
+    mocked.fetchState.mockImplementation(async () => ({
+      profile: null,
+      steps: {},
+      inventory: {},
+      city: [],
+      notifications: [serverWelcome(serverRead)],
+    }));
+    mocked.markNotificationsRead.mockImplementation(async (ids) => {
+      if (ids.includes(WELCOME.id) && !serverRead) serverRead = '2026-11-25T06:00:00Z';
+      return ids.length;
+    });
+  });
+  afterEach(() => useGameStore.getState().pauseLive());
+
+  it('loads them from the server on connect', async () => {
+    await useGameStore.getState().connect();
+    expect(useGameStore.getState().notifications).toEqual([WELCOME]);
+  });
+
+  it('marks one read at once and sends it when online', async () => {
+    await useGameStore.getState().connect();
+    useGameStore.getState().markNotificationRead(WELCOME.id);
+    expect(useGameStore.getState().notifications[0].readAt).not.toBeNull();
+    await flush();
+    expect(mocked.markNotificationsRead).toHaveBeenCalledWith([WELCOME.id]);
+    expect(useGameStore.getState().notificationsReadPending).toEqual([]);
+  });
+
+  it('queues a read made offline, keeps it read through connect and sends it', async () => {
+    useGameStore.setState({ notifications: [WELCOME] });
+    useGameStore.getState().markNotificationRead(WELCOME.id);
+    expect(mocked.markNotificationsRead).not.toHaveBeenCalled();
+    expect(useGameStore.getState().notificationsReadPending).toEqual([WELCOME.id]);
+
+    // The server still says unread when the state downloads: the local read wins.
+    mocked.markNotificationsRead.mockImplementationOnce(async () => {
+      expect(useGameStore.getState().notifications[0].readAt).not.toBeNull();
+      return 1;
+    });
+    await useGameStore.getState().connect();
+    await flush();
+    expect(mocked.markNotificationsRead).toHaveBeenCalledWith([WELCOME.id]);
+    expect(useGameStore.getState().notificationsReadPending).toEqual([]);
+    expect(useGameStore.getState().notifications[0].readAt).not.toBeNull();
+  });
+
+  it('stays queued when the request is cut off', async () => {
+    await useGameStore.getState().connect();
+    mocked.markNotificationsRead.mockRejectedValueOnce(offline());
+    useGameStore.getState().markNotificationRead(WELCOME.id);
+    await flush();
+    expect(useGameStore.getState()).toMatchObject({ cloud: 'offline', notificationsReadPending: [WELCOME.id] });
+  });
+
+  it('ignores unknown and already-read ids', async () => {
+    await useGameStore.getState().connect();
+    useGameStore.getState().markNotificationRead('00000000-0000-4000-8000-000000000999');
+    useGameStore.getState().markNotificationRead(WELCOME.id);
+    useGameStore.getState().markNotificationRead(WELCOME.id);
+    await flush();
+    expect(mocked.markNotificationsRead).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the cached list when an older server sends none', async () => {
+    useGameStore.setState({ notifications: [WELCOME] });
+    mocked.fetchState.mockResolvedValueOnce({ profile: null, steps: {}, inventory: {}, city: [] });
+    await useGameStore.getState().connect();
+    expect(useGameStore.getState().notifications).toEqual([WELCOME]);
+  });
+});
+
 describe('sign in to an existing account', () => {
   const accountState = () =>
     mocked.fetchState.mockImplementation(async () => ({
@@ -354,7 +454,9 @@ describe('sign in to an existing account', () => {
       stepsToday: 700,
       displayName: 'Guest',
       profilePending: true,
-      pendingCity: [{ op: 'place', itemId: 'bakery', x: 1, y: 1 }],
+      pendingCity: [{ cityId: null, op: 'place', itemId: 'bakery', x: 1, y: 1 }],
+      notifications: [{ ...WELCOME, readAt: '2026-11-25T05:00:00Z' }],
+      notificationsReadPending: [WELCOME.id],
     });
   });
 
@@ -371,7 +473,10 @@ describe('sign in to an existing account', () => {
     expect(mocked.syncSteps).not.toHaveBeenCalled();
     expect(mocked.placeItem).not.toHaveBeenCalled();
     expect(mocked.updateProfile).not.toHaveBeenCalled();
+    expect(mocked.markNotificationsRead).not.toHaveBeenCalled();
     expect(useGameStore.getState()).toMatchObject({
+      notifications: [],
+      notificationsReadPending: [],
       cloud: 'online',
       accountEmail: 'bry@example.com',
       displayName: 'Bry',
@@ -522,5 +627,149 @@ describe('wood haul popup', () => {
     walked(900, 90, 490);
     await useGameStore.getState().connect();
     expect(useGameStore.getState()).toMatchObject({ showHaul: false, haul: { steps: 900, wood: 90 } });
+  });
+});
+
+describe('cities', () => {
+  const A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const C = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  let tiles: Record<string, ServerState['city']>;
+  let list: { id: string; name: string | null; position: number; lots: number }[];
+
+  /** The fake server's answer for one city (the first when unknown), with pool counts across all. */
+  const stateFor = (cityId: string | null): ServerState => {
+    const id = cityId && tiles[cityId] ? cityId : list[0].id;
+    const placed: Record<string, number> = {};
+    for (const t of Object.values(tiles).flat()) placed[t.item_id] = (placed[t.item_id] ?? 0) + 1;
+    return {
+      profile: null,
+      steps: {},
+      inventory: { bakery: { count: 1, foil: 0 }, 'lamp-post': { count: 1, foil: 0 } },
+      city: [...tiles[id]],
+      cities: list.map((c) => ({ ...c, lots: tiles[c.id].length })),
+      city_id: id,
+      placed,
+    };
+  };
+
+  beforeEach(() => {
+    tiles = { [A]: [{ x: 1, y: 1, item_id: 'bakery' }], [B]: [] };
+    list = [
+      { id: A, name: null, position: 0, lots: 1 },
+      { id: B, name: 'Harbor Side', position: 1, lots: 0 },
+    ];
+    mocked.fetchState.mockImplementation(async (cityId) => stateFor(cityId ?? null));
+    mocked.placeItem.mockImplementation(async (cityId, item_id, x, y) => {
+      tiles[cityId ?? A].push({ x, y, item_id });
+      return { city_id: cityId ?? A, x, y, item_id };
+    });
+    mocked.createCity.mockImplementation(async (name) => {
+      tiles[C] = [];
+      const city = { id: C, name, position: 2, lots: 0 };
+      list.push(city);
+      return { city, price: 2000, balance: 1000 };
+    });
+    mocked.deleteCity.mockImplementation(async (id) => {
+      delete tiles[id];
+      list = list.filter((c) => c.id !== id);
+      return { id };
+    });
+  });
+
+  it('switches at once from the cache, then loads the city from the server', async () => {
+    await useGameStore.getState().connect();
+    expect(useGameStore.getState()).toMatchObject({ activeCityId: A, city: [{ itemId: 'bakery', x: 1, y: 1 }] });
+
+    useGameStore.getState().switchCity(B);
+    // On screen right away (nothing cached yet for B), and the bakery stays taken: it stands in A.
+    expect(useGameStore.getState()).toMatchObject({ activeCityId: B, city: [], placedElsewhere: { bakery: 1 } });
+    await flush();
+    expect(mocked.fetchState).toHaveBeenLastCalledWith(B);
+
+    expect(useGameStore.getState().placeItem('bakery', 0, 0)).toBe(false);
+    expect(useGameStore.getState().placeItem('lamp-post', 4, 4)).toBe(true);
+    await flush();
+    expect(mocked.placeItem).toHaveBeenLastCalledWith(B, 'lamp-post', 4, 4);
+
+    // Back to A: its tiles come from this phone's cache, before any server answer.
+    useGameStore.getState().switchCity(A);
+    expect(useGameStore.getState()).toMatchObject({
+      activeCityId: A,
+      city: [{ itemId: 'bakery', x: 1, y: 1 }],
+      placedElsewhere: { 'lamp-post': 1 },
+      cityTiles: { [B]: [{ itemId: 'lamp-post', x: 4, y: 4 }] },
+    });
+  });
+
+  it('never lets a late answer for the old city undo a switch', async () => {
+    await useGameStore.getState().connect();
+    let answer!: (s: ServerState) => void;
+    mocked.fetchState.mockImplementationOnce(() => new Promise((r) => (answer = r)));
+    useGameStore.getState().switchCity(B); // its refresh hangs
+    useGameStore.getState().switchCity(A);
+    answer(stateFor(B));
+    await flush();
+    expect(useGameStore.getState()).toMatchObject({ activeCityId: A, city: [{ itemId: 'bakery', x: 1, y: 1 }] });
+  });
+
+  it('buys a new city on the server and switches to it', async () => {
+    await useGameStore.getState().connect();
+    await expect(useGameStore.getState().createCity('Old Town')).resolves.toEqual({ ok: true });
+    expect(mocked.createCity).toHaveBeenCalledWith('Old Town');
+    const s = useGameStore.getState();
+    expect(s.balance).toBe(1000);
+    expect(s.activeCityId).toBe(C);
+    expect(s.city).toEqual([]);
+    expect(s.cities.map((c) => c.id)).toEqual([A, B, C]);
+  });
+
+  it('needs a connection to buy a city', async () => {
+    mocked.ensureSession.mockRejectedValue(offline());
+    await expect(useGameStore.getState().createCity(null)).resolves.toEqual({ ok: false, reason: 'offline' });
+    expect(mocked.createCity).not.toHaveBeenCalled();
+  });
+
+  it('returns a deleted city’s buildings to the pool', async () => {
+    tiles[B] = [{ x: 2, y: 2, item_id: 'lamp-post' }];
+    await useGameStore.getState().connect();
+    expect(useGameStore.getState().placedElsewhere).toEqual({ 'lamp-post': 1 });
+
+    await expect(useGameStore.getState().deleteCity(B)).resolves.toEqual({ ok: true });
+    const s = useGameStore.getState();
+    expect(s.cities.map((c) => c.id)).toEqual([A]);
+    expect(s.placedElsewhere).toEqual({});
+    expect(s.placeItem('lamp-post', 3, 3)).toBe(true);
+  });
+
+  it('switches to the first city when the one on screen is deleted', async () => {
+    await useGameStore.getState().connect();
+    useGameStore.getState().switchCity(B);
+    await flush();
+    await useGameStore.getState().deleteCity(B);
+    expect(useGameStore.getState()).toMatchObject({ activeCityId: A, city: [{ itemId: 'bakery', x: 1, y: 1 }] });
+  });
+
+  it('keeps the last city', async () => {
+    list = [list[0]];
+    delete tiles[B];
+    await useGameStore.getState().connect();
+    await expect(useGameStore.getState().deleteCity(A)).resolves.toEqual({ ok: false, reason: 'last_city' });
+    expect(mocked.deleteCity).not.toHaveBeenCalled();
+  });
+
+  it('replays a change made offline in another city to that city', async () => {
+    await useGameStore.getState().connect();
+    useGameStore.getState().switchCity(B);
+    await flush();
+    useGameStore.setState({ cloud: 'offline' });
+    useGameStore.getState().placeItem('lamp-post', 6, 6);
+    useGameStore.getState().switchCity(A);
+    expect(useGameStore.getState().pendingCity).toEqual([{ cityId: B, op: 'place', itemId: 'lamp-post', x: 6, y: 6 }]);
+
+    await useGameStore.getState().connect();
+    expect(mocked.placeItem).toHaveBeenLastCalledWith(B, 'lamp-post', 6, 6);
+    expect(tiles[B]).toEqual([{ x: 6, y: 6, item_id: 'lamp-post' }]);
+    expect(useGameStore.getState()).toMatchObject({ activeCityId: A, pendingCity: [], placedElsewhere: { 'lamp-post': 1 } });
   });
 });

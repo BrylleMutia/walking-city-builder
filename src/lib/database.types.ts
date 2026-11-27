@@ -21,11 +21,20 @@ export type Database = {
         Update: { id?: string; is_active?: boolean; name?: string; price?: number; sort_order?: number; tagline?: string }
         Relationships: []
       }
-      city_tiles: {
-        Row: { item_id: string; placed_at: string; user_id: string; x: number; y: number }
-        Insert: { item_id: string; placed_at?: string; user_id: string; x: number; y: number }
-        Update: { item_id?: string; placed_at?: string; user_id?: string; x?: number; y?: number }
+      cities: {
+        Row: { created_at: string; id: string; name: string | null; position: number; user_id: string }
+        Insert: { created_at?: string; id?: string; name?: string | null; position: number; user_id: string }
+        Update: { created_at?: string; id?: string; name?: string | null; position?: number; user_id?: string }
         Relationships: [
+          { foreignKeyName: "cities_user_id_fkey"; columns: ["user_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
+        ]
+      }
+      city_tiles: {
+        Row: { city_id: string; item_id: string; placed_at: string; user_id: string; x: number; y: number }
+        Insert: { city_id: string; item_id: string; placed_at?: string; user_id: string; x: number; y: number }
+        Update: { city_id?: string; item_id?: string; placed_at?: string; user_id?: string; x?: number; y?: number }
+        Relationships: [
+          { foreignKeyName: "city_tiles_city_id_fkey"; columns: ["city_id"]; isOneToOne: false; referencedRelation: "cities"; referencedColumns: ["id"] },
           { foreignKeyName: "city_tiles_item_id_fkey"; columns: ["item_id"]; isOneToOne: false; referencedRelation: "items"; referencedColumns: ["id"] },
           { foreignKeyName: "city_tiles_user_id_fkey"; columns: ["user_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
         ]
@@ -39,9 +48,9 @@ export type Database = {
         ]
       }
       game_config: {
-        Row: { cards_per_pack: number; foil_chance: number; grid_size: number; id: boolean; max_daily_steps: number; starting_balance: number; wood_drop_chance: number }
-        Insert: { cards_per_pack?: number; foil_chance?: number; grid_size?: number; id?: boolean; max_daily_steps?: number; starting_balance?: number; wood_drop_chance?: number }
-        Update: { cards_per_pack?: number; foil_chance?: number; grid_size?: number; id?: boolean; max_daily_steps?: number; starting_balance?: number; wood_drop_chance?: number }
+        Row: { cards_per_pack: number; city_price_step: number; foil_chance: number; grid_size: number; id: boolean; max_cities: number; max_daily_steps: number; starting_balance: number; wood_drop_chance: number }
+        Insert: { cards_per_pack?: number; city_price_step?: number; foil_chance?: number; grid_size?: number; id?: boolean; max_cities?: number; max_daily_steps?: number; starting_balance?: number; wood_drop_chance?: number }
+        Update: { cards_per_pack?: number; city_price_step?: number; foil_chance?: number; grid_size?: number; id?: boolean; max_cities?: number; max_daily_steps?: number; starting_balance?: number; wood_drop_chance?: number }
         Relationships: []
       }
       inventory: {
@@ -60,6 +69,14 @@ export type Database = {
         Relationships: [
           { foreignKeyName: "items_rarity_fkey"; columns: ["rarity"]; isOneToOne: false; referencedRelation: "rarities"; referencedColumns: ["id"] },
           { foreignKeyName: "items_set_id_fkey"; columns: ["set_id"]; isOneToOne: false; referencedRelation: "card_sets"; referencedColumns: ["id"] },
+        ]
+      }
+      notifications: {
+        Row: { body: string; created_at: string; id: string; kind: string; read_at: string | null; title: string; user_id: string }
+        Insert: { body: string; created_at?: string; id?: string; kind: string; read_at?: string | null; title: string; user_id: string }
+        Update: { body?: string; created_at?: string; id?: string; kind?: string; read_at?: string | null; title?: string; user_id?: string }
+        Relationships: [
+          { foreignKeyName: "notifications_user_id_fkey"; columns: ["user_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
         ]
       }
       pack_cards: {
@@ -100,10 +117,22 @@ export type Database = {
         Args: { p_force_foil?: boolean; p_force_legendary?: boolean; p_set_id: string }
         Returns: Json
       }
-      get_my_state: { Args: { p_since?: string }; Returns: Json }
-      move_item: { Args: { p_from_x: number; p_from_y: number; p_to_x: number; p_to_y: number }; Returns: Json }
-      place_item: { Args: { p_item_id: string; p_x: number; p_y: number }; Returns: Json }
-      remove_item: { Args: { p_x: number; p_y: number }; Returns: Json }
+      create_city: { Args: { p_name?: string }; Returns: Json }
+      delete_city: { Args: { p_city_id: string }; Returns: Json }
+      get_city: { Args: { p_city_id: string }; Returns: Json }
+      get_my_state: { Args: { p_city_id?: string; p_since?: string }; Returns: Json }
+      mark_notifications_read: { Args: { p_ids: string[] }; Returns: number }
+      // The overloads without p_city_id act on the first city (apps from before multi_city).
+      move_item:
+        | { Args: { p_city_id: string; p_from_x: number; p_from_y: number; p_to_x: number; p_to_y: number }; Returns: Json }
+        | { Args: { p_from_x: number; p_from_y: number; p_to_x: number; p_to_y: number }; Returns: Json }
+      place_item:
+        | { Args: { p_city_id: string; p_item_id: string; p_x: number; p_y: number }; Returns: Json }
+        | { Args: { p_item_id: string; p_x: number; p_y: number }; Returns: Json }
+      remove_item:
+        | { Args: { p_city_id: string; p_x: number; p_y: number }; Returns: Json }
+        | { Args: { p_x: number; p_y: number }; Returns: Json }
+      rename_city: { Args: { p_city_id: string; p_name: string }; Returns: Json }
       reset_progress: { Args: never; Returns: Json }
       sync_steps: { Args: { p_day: string; p_steps: number }; Returns: Json }
       update_profile: { Args: { p_avatar_id?: string; p_display_name?: string; p_step_goal?: number }; Returns: Json }

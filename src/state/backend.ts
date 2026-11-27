@@ -17,6 +17,11 @@ export type BackendReason =
   | 'tile_empty'
   | 'out_of_bounds'
   | 'same_tile'
+  // Cities
+  | 'city_limit'
+  | 'last_city'
+  | 'city_not_found'
+  | 'invalid_name'
   // Email sign-up (guest -> email account)
   | 'email_invalid'
   | 'email_taken'
@@ -43,6 +48,10 @@ const KNOWN: BackendReason[] = [
   'tile_empty',
   'out_of_bounds',
   'same_tile',
+  'city_limit',
+  'last_city',
+  'city_not_found',
+  'invalid_name',
   'not_authenticated',
 ];
 
@@ -168,8 +177,9 @@ async function rpc<T>(call: PromiseLike<{ data: unknown; error: unknown }>): Pro
   }
 }
 
-export function fetchState(sinceDay?: string): Promise<ServerState> {
-  return rpc<ServerState>(supabase.rpc('get_my_state', sinceDay ? { p_since: sinceDay } : {}));
+/** Everything about the player, with the tiles of `cityId` only (the first city when null). */
+export function fetchState(cityId: string | null = null): Promise<ServerState> {
+  return rpc<ServerState>(supabase.rpc('get_my_state', cityId ? { p_city_id: cityId } : {}));
 }
 
 export function syncSteps(day: string, steps: number) {
@@ -188,21 +198,51 @@ export function buyPack(setId: string, forceLegendary: boolean, forceFoil: boole
   );
 }
 
-export function placeItem(itemId: string, x: number, y: number) {
-  return rpc<{ x: number; y: number; item_id: string }>(
-    supabase.rpc('place_item', { p_item_id: itemId, p_x: x, p_y: y }),
+// City changes name their city; null is the player's first city. (The server
+// casts a JSON null to uuid, so these always reach the city-aware overloads.)
+type CityId = string | null;
+
+export function placeItem(cityId: CityId, itemId: string, x: number, y: number) {
+  return rpc<{ city_id: string; x: number; y: number; item_id: string }>(
+    supabase.rpc('place_item', { p_city_id: cityId as string, p_item_id: itemId, p_x: x, p_y: y }),
   );
 }
 
 /** Moves an object to another lot; if that lot is taken, the two objects swap. */
-export function moveItem(fx: number, fy: number, tx: number, ty: number) {
+export function moveItem(cityId: CityId, fx: number, fy: number, tx: number, ty: number) {
   return rpc<{ swapped: boolean }>(
-    supabase.rpc('move_item', { p_from_x: fx, p_from_y: fy, p_to_x: tx, p_to_y: ty }),
+    supabase.rpc('move_item', { p_city_id: cityId as string, p_from_x: fx, p_from_y: fy, p_to_x: tx, p_to_y: ty }),
   );
 }
 
-export function removeItem(x: number, y: number) {
-  return rpc<{ x: number; y: number; item_id: string }>(supabase.rpc('remove_item', { p_x: x, p_y: y }));
+export function removeItem(cityId: CityId, x: number, y: number) {
+  return rpc<{ x: number; y: number; item_id: string }>(
+    supabase.rpc('remove_item', { p_city_id: cityId as string, p_x: x, p_y: y }),
+  );
+}
+
+type ServerCity = NonNullable<ServerState['cities']>[number];
+
+/** A new, empty city. The server charges (number of cities) × 1,000 Wood. */
+export function createCity(name: string | null) {
+  return rpc<{ city: ServerCity; price: number; balance: number }>(
+    supabase.rpc('create_city', name ? { p_name: name } : {}),
+  );
+}
+
+/** An empty name goes back to the default one. */
+export function renameCity(cityId: string, name: string | null) {
+  return rpc<{ id: string; name: string | null }>(supabase.rpc('rename_city', { p_city_id: cityId, p_name: name ?? '' }));
+}
+
+/** Its buildings return to the inventory; the last city can't be deleted. */
+export function deleteCity(cityId: string) {
+  return rpc<{ id: string }>(supabase.rpc('delete_city', { p_city_id: cityId }));
+}
+
+/** One city's tiles (previews of cities not visited on this phone). */
+export function fetchCity(cityId: string) {
+  return rpc<ServerState['city']>(supabase.rpc('get_city', { p_city_id: cityId }));
 }
 
 /** Saves the player's name, step goal and portrait (the server trims the name and keeps its own if empty). */
@@ -214,6 +254,11 @@ export function updateProfile(profile: { displayName: string; goal: number; avat
       p_avatar_id: profile.avatarId,
     }),
   );
+}
+
+/** Marks the player's listed notifications read; returns how many changed (other ids are ignored). */
+export function markNotificationsRead(ids: string[]) {
+  return rpc<number>(supabase.rpc('mark_notifications_read', { p_ids: ids }));
 }
 
 export function resetProgress() {

@@ -3,8 +3,15 @@ import {
   GRID_SIZE,
   EMPTY_HAUL,
   HAUL_MIN_STEPS,
+  CITY_PRICE_STEP,
   STARTING_WOOD,
+  activeCityOf,
   addCards,
+  cityDisplayName,
+  cityPrice,
+  cleanCityName,
+  lotsCovered,
+  switchCity,
   addToHaul,
   fitCity,
   fits,
@@ -21,6 +28,7 @@ import {
   placeItem,
   raiseStepsToday,
   recentDays,
+  weekSummary,
   removeAt,
   rollDay,
   spend,
@@ -92,6 +100,19 @@ describe('steps', () => {
     expect(streak(s, today)).toBe(3);
     // A new day with no steps yet does not break yesterday's streak.
     expect(streak(rollDay(s, '2026-11-17'), new Date(2026, 10, 17))).toBe(3);
+  });
+
+  it('summarises a week against the goal', () => {
+    const days = (...steps: number[]) => steps.map((n) => ({ steps: n }));
+    expect(weekSummary(days(0, 0, 0, 0, 0, 0, 0), 10000)).toEqual({ total: 0, average: 0, goalsHit: 0, best: 0 });
+    // Exactly the goal counts as hit; the average includes the empty days.
+    expect(weekSummary(days(0, 10000, 2500, 0, 12000, 500, 3000), 10000)).toEqual({
+      total: 28000,
+      average: 4000,
+      goalsHit: 2,
+      best: 12000,
+    });
+    expect(weekSummary([], 10000)).toEqual({ total: 0, average: 0, goalsHit: 0, best: 0 });
   });
 });
 
@@ -216,8 +237,8 @@ describe('paths', () => {
 describe('moveItem (top-down editing)', () => {
   const owned = addCards(initialData(), [card('flower-kiosk'), card('lamp-post')]);
   const built = applyCityOps(owned, [
-    { op: 'place', itemId: 'flower-kiosk', x: 1, y: 1 },
-    { op: 'place', itemId: 'lamp-post', x: 2, y: 2 },
+    { cityId: null, op: 'place', itemId: 'flower-kiosk', x: 1, y: 1 },
+    { cityId: null, op: 'place', itemId: 'lamp-post', x: 2, y: 2 },
   ]);
 
   it('moves an object to a free lot', () => {
@@ -248,9 +269,9 @@ describe('moveItem (top-down editing)', () => {
 
   it('replays queued moves, skipping ones that no longer fit', () => {
     const s = applyCityOps(built, [
-      { op: 'move', fx: 1, fy: 1, tx: 2, ty: 2 }, // swap
-      { op: 'move', fx: 7, fy: 7, tx: 0, ty: 0 }, // nothing there any more: skipped
-      { op: 'move', fx: 2, fy: 2, tx: 3, ty: 3 },
+      { cityId: null, op: 'move', fx: 1, fy: 1, tx: 2, ty: 2 }, // swap
+      { cityId: null, op: 'move', fx: 7, fy: 7, tx: 0, ty: 0 }, // nothing there any more: skipped
+      { cityId: null, op: 'move', fx: 2, fy: 2, tx: 3, ty: 3 },
     ]);
     expect(s.city).toEqual([
       { itemId: 'flower-kiosk', x: 3, y: 3 },
@@ -264,10 +285,10 @@ describe('applyCityOps', () => {
 
   it('replays queued changes in order', () => {
     const s = applyCityOps(owned, [
-      { op: 'place', itemId: 'flower-kiosk', x: 1, y: 1 },
-      { op: 'place', itemId: 'lamp-post', x: 2, y: 1 },
-      { op: 'remove', x: 1, y: 1 },
-      { op: 'place', itemId: 'flower-kiosk', x: 5, y: 5 },
+      { cityId: null, op: 'place', itemId: 'flower-kiosk', x: 1, y: 1 },
+      { cityId: null, op: 'place', itemId: 'lamp-post', x: 2, y: 1 },
+      { cityId: null, op: 'remove', x: 1, y: 1 },
+      { cityId: null, op: 'place', itemId: 'flower-kiosk', x: 5, y: 5 },
     ]);
     expect(s.city).toEqual([
       { itemId: 'lamp-post', x: 2, y: 1 },
@@ -278,10 +299,10 @@ describe('applyCityOps', () => {
   it('skips changes that no longer fit the state', () => {
     const base = placeItem(owned, 'flower-kiosk', 0, 0)!; // e.g. already on the server
     const s = applyCityOps(base, [
-      { op: 'place', itemId: 'lamp-post', x: 0, y: 0 }, // tile taken
-      { op: 'place', itemId: 'flower-kiosk', x: 3, y: 3 }, // no bakery left
-      { op: 'remove', x: 9, y: 9 }, // nothing there
-      { op: 'place', itemId: 'lamp-post', x: 4, y: 4 },
+      { cityId: null, op: 'place', itemId: 'lamp-post', x: 0, y: 0 }, // tile taken
+      { cityId: null, op: 'place', itemId: 'flower-kiosk', x: 3, y: 3 }, // no bakery left
+      { cityId: null, op: 'remove', x: 9, y: 9 }, // nothing there
+      { cityId: null, op: 'place', itemId: 'lamp-post', x: 4, y: 4 },
     ]);
     expect(s.city).toEqual([
       { itemId: 'flower-kiosk', x: 0, y: 0 },
@@ -407,5 +428,73 @@ describe('footprints (multi-lot items)', () => {
       { itemId: 'lamp-post', x: 1, y: 0 },
       { itemId: 'bakery', x: 2, y: 0 },
     ]);
+  });
+});
+
+describe('several cities (shared pool)', () => {
+  const A = 'city-a';
+  const B = 'city-b';
+  const cities = [
+    { id: A, name: null, position: 0, lots: 0 },
+    { id: B, name: 'Harbor Side', position: 1, lots: 0 },
+  ];
+  const owned = { ...addCards(initialData(), [card('lamp-post'), card('flower-kiosk')]), cities, activeCityId: A };
+
+  it('counts copies standing in other cities as taken', () => {
+    const s = { ...owned, placedElsewhere: { 'lamp-post': 1 } };
+    expect(available(s, 'lamp-post')).toBe(0);
+    expect(placeItem(s, 'lamp-post', 0, 0)).toBeNull();
+    expect(available(s, 'flower-kiosk')).toBe(1);
+  });
+
+  it('moves the pool with the player when switching, and back again', () => {
+    const inA = placeItem(owned, 'lamp-post', 2, 2)!;
+    const inB = switchCity(inA, B, []);
+    expect(inB.city).toEqual([]);
+    expect(inB.activeCityId).toBe(B);
+    expect(available(inB, 'lamp-post')).toBe(0); // it stands in A
+    const kiosk = placeItem(inB, 'flower-kiosk', 5, 5)!;
+    const backInA = switchCity(kiosk, A, inA.city);
+    expect(backInA.city).toEqual([{ itemId: 'lamp-post', x: 2, y: 2 }]);
+    expect(backInA.placedElsewhere).toEqual({ 'flower-kiosk': 1 });
+    expect(switchCity(backInA, B, kiosk.city).placedElsewhere).toEqual({ 'lamp-post': 1 });
+    // Switching to the city on screen changes nothing.
+    expect(switchCity(backInA, A, [])).toBe(backInA);
+  });
+
+  it('treats a null active city as the first one', () => {
+    expect(activeCityOf({ activeCityId: null, cities })).toBe(A);
+    expect(activeCityOf({ activeCityId: null, cities: [] })).toBeNull();
+  });
+
+  it('prices each new city one step higher (the first is free)', () => {
+    expect(CITY_PRICE_STEP).toBe(1000);
+    expect([cityPrice(0), cityPrice(1), cityPrice(2), cityPrice(4)]).toEqual([0, 1000, 2000, 4000]);
+  });
+
+  it('names cities by default until renamed', () => {
+    const three = [...cities, { id: 'city-c', name: null, position: 5, lots: 0 }];
+    expect(cityDisplayName(three, A, 'Bry')).toBe("Bry's Town");
+    expect(cityDisplayName(three, B, 'Bry')).toBe('Harbor Side');
+    expect(cityDisplayName(three, 'city-c', 'Bry')).toBe('Town 3');
+    expect(cityDisplayName([], null, 'Bry')).toBe("Bry's Town");
+    expect(cleanCityName('  Old   Town ')).toBe('Old Town');
+    expect(cleanCityName('   ')).toBeNull();
+    expect(cleanCityName('x'.repeat(25))).toBeNull();
+  });
+
+  it('replays only the active city’s changes, but other cities’ placements still take from the pool', () => {
+    const s = applyCityOps(owned, [
+      { cityId: B, op: 'place', itemId: 'lamp-post', x: 1, y: 1 },
+      { cityId: A, op: 'place', itemId: 'lamp-post', x: 2, y: 2 }, // the only lamp is in B now
+      { cityId: null, op: 'place', itemId: 'flower-kiosk', x: 3, y: 3 }, // null = the first city, A
+      { cityId: B, op: 'remove', x: 3, y: 3 },
+    ]);
+    expect(s.city).toEqual([{ itemId: 'flower-kiosk', x: 3, y: 3 }]);
+    expect(s.placedElsewhere).toEqual({ 'lamp-post': 1 });
+  });
+
+  it('counts the lots a city covers', () => {
+    expect(lotsCovered([{ itemId: 'grand-theater', x: 0, y: 0 }, { itemId: 'lamp-post', x: 5, y: 5 }])).toBe(7);
   });
 });

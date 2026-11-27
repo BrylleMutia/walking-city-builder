@@ -15,6 +15,17 @@ export interface Placed {
   y: number;
 }
 
+/** One of the player's cities, as listed in the switcher. */
+export interface CitySummary {
+  id: string;
+  /** null: the default name (see `cityDisplayName`). */
+  name: string | null;
+  /** Order in the list (ascending); there can be gaps after a delete. */
+  position: number;
+  /** Lots covered, as the server last counted them (the active city's live count comes from `city`). */
+  lots: number;
+}
+
 export interface GameData {
   /** Local calendar day the `stepsToday` counter belongs to, e.g. 2026-11-16. */
   dateKey: string;
@@ -33,12 +44,28 @@ export interface GameData {
   /** Chosen portrait (data/avatars.ts). Stored on the server profile. */
   avatarId: AvatarId;
   collection: Partial<Record<ItemId, Owned>>;
+  /** The objects of the active city. Every placement rule works on this alone. */
   city: Placed[];
+  /** The player's cities, in order. Empty until the first sync. */
+  cities: CitySummary[];
+  /** The city `city` belongs to; null means the first city (before the first sync). */
+  activeCityId: string | null;
+  /**
+   * Shared pool: per item, the copies standing in the player's *other* cities.
+   * A card stands in one place at a time, so these aren't available here.
+   */
+  placedElsewhere: Partial<Record<ItemId, number>>;
   packsOpened: number;
 }
 
 /** Must match the server's `game_config.grid_size` (place_item's bounds check). */
 export const GRID_SIZE = 16;
+/** Must match the server's `game_config.city_price_step`: the Nth city costs (N − 1) × this. */
+export const CITY_PRICE_STEP = 1000;
+/** Must match the server's `game_config.max_cities`. */
+export const MAX_CITIES = 10;
+/** Same bound as the server's `cities.name`. */
+export const CITY_NAME_MAX = 24;
 /** Must match the server's `game_config.starting_balance` (two Cozy Downtown packs). */
 export const STARTING_WOOD = 400;
 /** Must match the server's `game_config.wood_drop_chance`; used only for "about N steps to go" hints. */
@@ -77,6 +104,9 @@ export function initialData(today: string = dayKey()): GameData {
     avatarId: DEFAULT_AVATAR,
     collection: {},
     city: [],
+    cities: [],
+    activeCityId: null,
+    placedElsewhere: {},
     packsOpened: 0,
   };
 }
@@ -176,9 +206,56 @@ export function placedCount(s: Pick<GameData, 'city'>, itemId: ItemId): number {
   return s.city.filter((p) => p.itemId === itemId).length;
 }
 
-/** Copies of an item that are owned but not standing in the city. */
-export function available(s: Pick<GameData, 'collection' | 'city'>, itemId: ItemId): number {
-  return (s.collection[itemId]?.count ?? 0) - placedCount(s, itemId);
+/** Copies of an item that are owned but not standing in this city or any other. */
+export function available(s: Pick<GameData, 'collection' | 'city' | 'placedElsewhere'>, itemId: ItemId): number {
+  return (s.collection[itemId]?.count ?? 0) - placedCount(s, itemId) - (s.placedElsewhere[itemId] ?? 0);
+}
+
+// ── Cities ───────────────────────────────────────────────────────────────────
+
+/** The id of the city `city` holds (null before the first sync: the first city). */
+export function activeCityOf(s: Pick<GameData, 'activeCityId' | 'cities'>): string | null {
+  return s.activeCityId ?? s.cities[0]?.id ?? null;
+}
+
+/** Wood the next city costs when the player already has `count` (the first one is free). */
+export const cityPrice = (count: number) => Math.max(0, count) * CITY_PRICE_STEP;
+
+/** "<name>'s Town" for the first city, "Town N" for the others, unless renamed. */
+export function cityDisplayName(cities: readonly CitySummary[], id: string | null, displayName: string): string {
+  const i = id ? cities.findIndex((c) => c.id === id) : 0;
+  const city = cities[i];
+  if (city?.name) return city.name;
+  return i <= 0 ? `${displayName}'s Town` : `Town ${i + 1}`;
+}
+
+/** Same tidy-up as display names, within the city-name bound. Null for an unusable name. */
+export function cleanCityName(raw: string): string | null {
+  const name = raw.replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim();
+  if (name.length === 0 || [...name].length > CITY_NAME_MAX) return null;
+  return name;
+}
+
+/** Lots a set of objects covers (multi-lot buildings count every lot). */
+export const lotsCovered = (city: readonly Placed[]) => city.reduce((n, p) => n + cellsOf(p.itemId).length, 0);
+
+function addCount(counts: Partial<Record<ItemId, number>>, itemId: ItemId, by: number) {
+  const n = (counts[itemId] ?? 0) + by;
+  if (n > 0) counts[itemId] = n;
+  else delete counts[itemId];
+}
+
+/**
+ * Makes `toId` the active city with `tiles` as its objects (cached, possibly
+ * stale: the next sync corrects them). The outgoing city's objects join
+ * `placedElsewhere` and the incoming ones leave it, so the pool stays shared.
+ */
+export function switchCity<T extends GameData>(s: T, toId: string, tiles: readonly Placed[]): T {
+  if (toId === activeCityOf(s)) return s;
+  const placedElsewhere = { ...s.placedElsewhere };
+  for (const p of s.city) addCount(placedElsewhere, p.itemId, 1);
+  for (const p of tiles) addCount(placedElsewhere, p.itemId, -1);
+  return { ...s, activeCityId: toId, city: [...tiles], placedElsewhere };
 }
 
 /** The object stored at exactly this anchor lot (not just covering it). */
@@ -291,20 +368,34 @@ export function fitCity(city: readonly Placed[]): Placed[] {
   return kept;
 }
 
-/** A city change made locally that the server hasn't confirmed yet. */
-export type CityOp =
+/**
+ * A city change made locally that the server hasn't confirmed yet. `cityId`
+ * null means the player's first city (changes queued before cities existed).
+ */
+export type CityOp = { cityId: string | null } & (
   | { op: 'place'; itemId: ItemId; x: number; y: number }
   | { op: 'remove'; x: number; y: number }
-  | { op: 'move'; fx: number; fy: number; tx: number; ty: number };
+  | { op: 'move'; fx: number; fy: number; tx: number; ty: number }
+);
 
 /**
  * Re-applies queued city changes on top of a (server) state, in order. Changes
  * that no longer fit (tile taken, item not owned) are skipped, so the result is
- * always a valid city.
+ * always a valid city. Changes to other cities don't touch `city`, but their
+ * placements still take a copy from the shared pool.
  */
 export function applyCityOps<T extends GameData>(s: T, ops: readonly CityOp[]): T {
   let out = s;
+  const active = activeCityOf(s);
   for (const o of ops) {
+    if ((o.cityId ?? s.cities[0]?.id ?? null) !== active) {
+      if (o.op === 'place' && available(out, o.itemId) > 0) {
+        const placedElsewhere = { ...out.placedElsewhere };
+        addCount(placedElsewhere, o.itemId, 1);
+        out = { ...out, placedElsewhere };
+      }
+      continue;
+    }
     const next =
       o.op === 'place'
         ? placeItem(out, o.itemId, o.x, o.y)
@@ -328,6 +419,25 @@ export function recentDays(s: DayData, today: Date, days = 7): { key: string; st
     out.push({ key, steps: key === s.dateKey ? s.stepsToday : (s.history[key] ?? 0) });
   }
   return out;
+}
+
+export interface WeekSummary {
+  total: number;
+  /** Rounded mean over every day passed in, including days with no steps. */
+  average: number;
+  /** Days with at least `goal` steps. */
+  goalsHit: number;
+  best: number;
+}
+
+export function weekSummary(week: { steps: number }[], goal: number): WeekSummary {
+  const total = week.reduce((a, d) => a + d.steps, 0);
+  return {
+    total,
+    average: week.length ? Math.round(total / week.length) : 0,
+    goalsHit: week.filter((d) => d.steps >= goal).length,
+    best: week.reduce((a, d) => Math.max(a, d.steps), 0),
+  };
 }
 
 /** Consecutive days, ending today or yesterday, with at least one step. */

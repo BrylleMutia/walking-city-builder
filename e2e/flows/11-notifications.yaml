@@ -1,0 +1,51 @@
+# The bell on Home: a fresh (or reset) player has one unread welcome; opening
+# it shows the walkthrough and marks it read, and the dot goes away.
+# Runs right after 00-reset (reset re-arms the welcome, 400 Wood, no packs).
+appId: host.exp.exponent
+---
+- tapOn:
+    id: tab-index
+- assertVisible:
+    id: home-notifications
+    text: "Notifications, 1 unread"
+- takeScreenshot: 11-home-bell-unread
+
+- tapOn:
+    id: home-notifications
+- assertVisible: "Notifications"
+- assertVisible: "1 new"
+- assertVisible: "Welcome to Stridewood!"
+- assertVisible:
+    id: notice-unread-dot
+- takeScreenshot: 11-notifications-list
+
+# Open the welcome: walkthrough + next step, and it's read.
+- tapOn:
+    id: notice-welcome
+- assertVisible:
+    id: welcome-guide
+- assertVisible: "You’re all caught up"
+- assertNotVisible:
+    id: notice-unread-dot
+- assertVisible: "4. Build your town"
+- assertVisible:
+    id: welcome-cta
+# The label is a child of the button, so check it on its own.
+- assertVisible: "Open the shop"
+- waitForAnimationToEnd
+- takeScreenshot: 11-welcome-open
+
+# The suggested next step goes to the Shop tab.
+- tapOn:
+    id: welcome-cta
+- assertVisible: "Pack shop"
+
+# Back on Home the dot is gone.
+- tapOn:
+    id: tab-index
+- assertVisible:
+    id: home-notifications
+    text: "Notifications"
+- assertNotVisible:
+    text: "Notifications, 1 unread"
+- takeScreenshot: 11-home-bell-read

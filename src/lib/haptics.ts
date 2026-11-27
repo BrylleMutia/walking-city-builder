@@ -1,6 +1,7 @@
 import * as Haptics from 'expo-haptics';
 
 import type { Rarity } from '../data/rarity';
+import { REVEAL_FX, type HapticStep } from '../logic/revealFx';
 
 let enabled = true;
 
@@ -21,11 +22,14 @@ export const haptic = {
   heavy: () => run(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)),
   success: () => run(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)),
   warning: () => run(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)),
-  /** Stronger feedback the rarer the card that just came into view. */
-  reveal: (rarity: Rarity) => {
-    if (rarity === 'legendary') haptic.success();
-    else if (rarity === 'epic') haptic.heavy();
-    else if (rarity === 'rare') haptic.medium();
-    else haptic.light();
+  /** A short rhythm of taps (ms offsets), e.g. heavy · heavy · success for a legendary. */
+  pattern: (steps: readonly HapticStep[]) => {
+    if (!enabled) return;
+    for (const step of steps) {
+      if (step.at <= 0) haptic[step.kind]();
+      else setTimeout(() => haptic[step.kind](), step.at);
+    }
   },
+  /** The rarity's reveal rhythm (`REVEAL_FX`): one light tap for a common up to three beats for a legendary. */
+  reveal: (rarity: Rarity) => haptic.pattern(REVEAL_FX[rarity].haptic),
 };

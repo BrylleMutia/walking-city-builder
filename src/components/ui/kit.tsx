@@ -2,7 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import React from 'react';
 import { View, type ViewProps } from 'react-native';
 
-import { cardShadow, colors } from '../../theme/tokens';
+import { cardShadow, colors, softShadow } from '../../theme/tokens';
 import { AnimatedCounter } from './AnimatedCounter';
 import { AppText } from './AppText';
 import { Tap } from './Tap';
@@ -189,17 +189,21 @@ export function SectionHeader({
   title,
   action,
   onAction,
+  right,
 }: {
   title: string;
   action?: string;
   onAction?: () => void;
+  /** Custom content in the action's place (e.g. a status chip). Wins over `action`. */
+  right?: React.ReactNode;
 }) {
   return (
     <View className="flex-row items-center justify-between mb-4">
       <AppText weight="heavy" className="text-xl">
         {title}
       </AppText>
-      {action && (
+      {right}
+      {!right && action && (
         <Tap onPress={onAction} haptics="tick" hitSlop={10}>
           <AppText weight="semi" tone="muted" className="text-sm">
             {action}
@@ -253,48 +257,97 @@ export function Meta({ icon, label, color }: { icon: FeatherName; label: string;
   );
 }
 
-/** Spendable Wood balance. */
-export function WoodPill({ balance, compact }: { balance: number; compact?: boolean }) {
-  return (
-    <View
-      className={`flex-row items-center bg-card rounded-full ${compact ? 'px-3 py-1.5' : 'px-4 py-2'}`}
-      style={cardShadow}
-    >
+/** Spendable Wood balance. Tappable when given `onPress`; `canBuy` adds a shopping-bag cue. */
+export function WoodPill({
+  balance,
+  compact,
+  canBuy,
+  onPress,
+  testID,
+  accessibilityLabel,
+}: {
+  balance: number;
+  compact?: boolean;
+  canBuy?: boolean;
+  onPress?: () => void;
+  testID?: string;
+  accessibilityLabel?: string;
+}) {
+  const className = `flex-row items-center bg-card rounded-full ${compact ? 'px-3 py-1.5' : 'px-4 py-2'}`;
+  const content = (
+    <>
       <View className="w-6 h-6 rounded-full bg-accent-soft items-center justify-center mr-1.5">
         <WoodIcon size={20} />
       </View>
       {/* Rolls on every change, so spending and earning Wood are felt, not just shown. */}
       <AnimatedCounter value={balance} size={compact ? 14 : 16} testID="wood-balance" />
-    </View>
+      {canBuy && (
+        <View className="ml-1.5">
+          <Feather name="shopping-bag" size={13} color={colors.accent.DEFAULT} />
+        </View>
+      )}
+    </>
+  );
+  if (!onPress) {
+    return (
+      <View className={className} style={softShadow}>
+        {content}
+      </View>
+    );
+  }
+  return (
+    <Tap
+      onPress={onPress}
+      testID={testID}
+      accessibilityLabel={accessibilityLabel}
+      className={className}
+      surfaceStyle={softShadow}
+    >
+      {content}
+    </Tap>
   );
 }
 
-export function StatTile({
-  icon,
-  value,
-  label,
-  tint,
-}: {
+const STAT_TINT = {
+  primary: { bg: 'bg-primary-soft', icon: colors.primary.dark },
+  accent: { bg: 'bg-accent-soft', icon: colors.accent.DEFAULT },
+  sky: { bg: 'bg-sky-soft', icon: colors.sky.dark },
+} as const;
+
+export interface Stat {
   icon: FeatherName;
   value: string;
+  unit: string;
   label: string;
-  tint: 'primary' | 'accent' | 'sky';
-}) {
-  const bg = tint === 'primary' ? 'bg-primary-soft' : tint === 'accent' ? 'bg-accent-soft' : 'bg-sky-soft';
-  const color =
-    tint === 'primary' ? colors.primary.dark : tint === 'accent' ? colors.accent.DEFAULT : '#2F8FCF';
+  tint: keyof typeof STAT_TINT;
+}
+
+/** Number with its unit on the same baseline ("2.3 km"). */
+function StatValue({ value, unit, className }: { value: string; unit: string; className: string }) {
   return (
-    <Card className="flex-1 p-3.5 rounded-tile">
-      <View className={`w-9 h-9 rounded-full items-center justify-center ${bg}`}>
-        <Feather name={icon} size={17} color={color} />
-      </View>
-      <AppText weight="heavy" className="text-lg mt-2.5">
-        {value}
+    <AppText weight="heavy" className={className} numberOfLines={1}>
+      {value}
+      <AppText weight="semi" tone="soft" className="text-xs">
+        {` ${unit}`}
       </AppText>
-      <AppText tone="muted" className="text-xs">
+    </AppText>
+  );
+}
+
+/** One stat on its own soft brand tint, centred. */
+export function StatTile({ icon, value, unit, label, tint }: Stat) {
+  const t = STAT_TINT[tint];
+  // A plain View, not Card: Card sets bg-card, and two bg classes on one element have no reliable winner.
+  return (
+    <View className={`flex-1 rounded-tile items-center px-2 py-3 ${t.bg}`}>
+      <View className="w-9 h-9 rounded-full items-center justify-center bg-card">
+        <Feather name={icon} size={17} color={t.icon} />
+      </View>
+      <StatValue value={value} unit={unit} className="text-xl mt-2" />
+      <AppText tone="soft" className="text-xs">
         {label}
       </AppText>
-    </Card>
+    </View>
   );
 }
 
