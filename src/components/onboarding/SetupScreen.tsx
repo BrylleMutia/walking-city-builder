@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import React from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, View, useWindowDimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { useSafeAreaFrame, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '../ui/AppText';
 import { IconButton } from '../ui/kit';
@@ -37,7 +37,9 @@ export function SetupScreen({
   backIcon?: 'arrow-left' | 'x';
   testID?: string;
 }) {
-  const { width, height } = useWindowDimensions();
+  // The root frame, not useWindowDimensions: on Android that leaves out the
+  // status and navigation bars, but the app draws edge-to-edge (see the intro).
+  const { width, height } = useSafeAreaFrame();
   const insets = useSafeAreaInsets();
   return (
     // Keeps the footer button above the keyboard (the name step has a text field).

@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { View, useWindowDimensions } from 'react-native';
+import { View } from 'react-native';
 import Animated, {
   interpolate,
   useAnimatedReaction,
@@ -10,7 +10,7 @@ import Animated, {
   useSharedValue,
   type SharedValue,
 } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaFrame, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { OnboardingArt, type OnboardingScene } from '../../components/onboarding/OnboardingArt';
@@ -21,19 +21,28 @@ import { Tap } from '../../components/ui/Tap';
 import { haptic } from '../../lib/haptics';
 
 const SLIDES: { scene: OnboardingScene; title: string; body: string }[] = [
-  { scene: 'walk', title: 'Walk', body: 'Every step you take\ncan turn up Wood' },
-  { scene: 'collect', title: 'Collect', body: 'Trade your Wood for\nbooster packs of buildings' },
-  { scene: 'build', title: 'Build', body: 'Place every card in\nyour own little city' },
+  { scene: 'walk', title: 'Walk', body: 'Every step is a chance\nto gather Wood' },
+  { scene: 'collect', title: 'Collect', body: 'Trade your Wood for packs\nof buildings and surprises' },
+  { scene: 'build', title: 'Build', body: 'Grow your own little city,\none building at a time' },
 ];
 const LAST = SLIDES.length - 1;
 /** Share of the screen the illustration takes, as in the reference. */
-const ART_SHARE = 0.58;
+const ART_SHARE = 0.66;
+/** Height above the bottom inset kept for the SKIP/dots (or Get started) row: 56 offset + 56 tall. */
+const CONTROLS_H = 112;
+/** The least room the title + two-line subtitle need; short phones shrink the art to keep it. */
+const TEXT_MIN = 130;
 
 /** Intro carousel: what the app is for, in three swipes. */
 export default function OnboardingIntro() {
-  const { width, height } = useWindowDimensions();
+  // The root frame, not useWindowDimensions: on Android that leaves out the
+  // status and navigation bars, but the app draws edge-to-edge, so heights
+  // from it come out short and the text sits above the middle of its space.
+  const { width, height } = useSafeAreaFrame();
   const insets = useSafeAreaInsets();
-  const artH = Math.round(height * ART_SHARE);
+  const textAreaBottom = insets.bottom + CONTROLS_H;
+  const artH = Math.round(Math.min(height * ART_SHARE, height - textAreaBottom - TEXT_MIN));
+  const textH = height - artH - textAreaBottom;
 
   const page = useSharedValue(0);
   const [onLast, setOnLast] = useState(false);
@@ -73,7 +82,7 @@ export default function OnboardingIntro() {
         scrollEventThrottle={16}
       >
         {SLIDES.map((s, i) => (
-          <Slide key={s.scene} slide={s} index={i} page={page} width={width} artH={artH} />
+          <Slide key={s.scene} slide={s} index={i} page={page} width={width} artH={artH} textH={textH} />
         ))}
       </Animated.ScrollView>
 
@@ -120,12 +129,15 @@ function Slide({
   page,
   width,
   artH,
+  textH,
 }: {
   slide: (typeof SLIDES)[number];
   index: number;
   page: SharedValue<number>;
   width: number;
   artH: number;
+  /** Room between the art and the bottom controls; the text is centred in it. */
+  textH: number;
 }) {
   const offset = useDerivedValue(() => page.value - index);
   // Text drifts a little slower than the page, so it settles after the art.
@@ -136,11 +148,11 @@ function Slide({
   return (
     <View style={{ width }}>
       <OnboardingArt scene={slide.scene} width={width} height={artH} offset={offset} />
-      <Animated.View className="items-center px-10 mt-8" style={textStyle}>
-        <AppText weight="heavy" className="text-center" style={{ fontSize: 34, lineHeight: 42 }}>
+      <Animated.View className="items-center justify-center px-8" style={[{ height: textH }, textStyle]}>
+        <AppText weight="heavy" className="text-center" style={{ fontSize: 44, lineHeight: 50, letterSpacing: -0.5 }}>
           {slide.title}
         </AppText>
-        <AppText tone="soft" className="text-base text-center mt-2" style={{ lineHeight: 23 }}>
+        <AppText tone="soft" className="text-center mt-3" style={{ fontSize: 19, lineHeight: 26 }}>
           {slide.body}
         </AppText>
       </Animated.View>
