@@ -12,5 +12,6 @@ executionOrder:
     - 05-persistence
     - 08-city-top-view
     - 09-all-packs
+    - 10-cities
     - 06-components
     - 07-onboarding

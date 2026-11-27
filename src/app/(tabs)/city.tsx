@@ -1,7 +1,7 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Canvas } from '@shopify/react-native-skia';
 import { router } from 'expo-router';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import Animated, { FadeInDown, FadeOutDown, LinearTransition } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,11 +13,11 @@ import { AppText } from '../../components/ui/AppText';
 import { Card, Meta } from '../../components/ui/kit';
 import { Tap } from '../../components/ui/Tap';
 import { toast } from '../../components/ui/toast';
-import { ALL_ITEMS, cellsOf, footprintLabel } from '../../data/items';
+import { ALL_ITEMS, footprintLabel } from '../../data/items';
 import { RARITY_COLOR, RARITY_LABEL } from '../../data/rarity';
 import type { ItemDef, ItemId } from '../../data/sets/types';
 import { haptic } from '../../lib/haptics';
-import { GRID_SIZE, available, objectAt, tileAt } from '../../state/gameLogic';
+import { GRID_SIZE, activeCityOf, available, cityDisplayName, lotsCovered, objectAt, tileAt } from '../../state/gameLogic';
 import { useGameStore } from '../../state/useGameStore';
 import { cardShadow, colors } from '../../theme/tokens';
 
@@ -47,8 +47,11 @@ export default function CityScreen() {
   const map = useRef<CityMapHandle>(null);
   // City and inventory only: step syncs and other store changes don't touch
   // this screen (the Skia map is its most expensive render).
-  const state = useGameStore(useShallow((s) => ({ city: s.city, collection: s.collection })));
-  const displayName = useGameStore((s) => s.displayName);
+  const state = useGameStore(
+    useShallow((s) => ({ city: s.city, collection: s.collection, placedElsewhere: s.placedElsewhere })),
+  );
+  const cityName = useGameStore((s) => cityDisplayName(s.cities, activeCityOf(s), s.displayName));
+  const activeCity = useGameStore(activeCityOf);
   const removeAt = useGameStore((s) => s.removeAt);
   const [sel, setSel] = useState<Selection>(null);
   const [view, setView] = useState<'iso' | 'top'>('iso');
@@ -67,7 +70,18 @@ export default function CityScreen() {
   );
 
   // Big buildings cover several lots each.
-  const lotsBuilt = useMemo(() => state.city.reduce((n, p) => n + cellsOf(p.itemId).length, 0), [state.city]);
+  const lotsBuilt = useMemo(() => lotsCovered(state.city), [state.city]);
+
+  // A new city: drop any selection from the old one and show the whole lawn.
+  // (The map stays mounted and only its objects change, so switching is one
+  // re-render, not a new Skia canvas.)
+  const shownCity = useRef(activeCity);
+  useEffect(() => {
+    if (shownCity.current === activeCity) return;
+    shownCity.current = activeCity;
+    setSel(null);
+    map.current?.recenter();
+  }, [activeCity]);
 
   const selectedTile = sel?.kind === 'tile' || sel?.kind === 'moving' ? { x: sel.x, y: sel.y } : null;
   const tileBuilding = selectedTile ? tileAt(state, selectedTile.x, selectedTile.y) : undefined;
@@ -162,9 +176,21 @@ export default function CityScreen() {
           <AppText tone="muted" className="text-xs">
             My city
           </AppText>
-          <AppText weight="heavy" className="text-xl">
-            {`${displayName}'s Town`}
-          </AppText>
+          {/* The town name is the switcher: every city, new ones, rename, delete. */}
+          <Tap
+            onPress={() => router.push('/cities')}
+            testID="city-switcher"
+            accessibilityLabel={`${cityName}, switch city`}
+            haptics="tick"
+            className="flex-row items-center self-start"
+          >
+            <AppText weight="heavy" className="text-xl" numberOfLines={1} testID="city-name">
+              {cityName}
+            </AppText>
+            <View className="ml-1.5 w-6 h-6 rounded-full bg-primary-soft items-center justify-center">
+              <Feather name="chevron-down" size={16} color={colors.primary.dark} />
+            </View>
+          </Tap>
           <Meta
             icon="grid"
             label={`${lotsBuilt} of ${GRID_SIZE * GRID_SIZE} lots built`}

@@ -74,6 +74,17 @@ export default function RootLayout() {
           <Stack.Screen name="edit-name" options={{ contentStyle: { backgroundColor: colors.card } }} />
           {/* The bell on Home. */}
           <Stack.Screen name="notifications" />
+          {/* City switcher, from the town name on the City tab. */}
+          <Stack.Screen
+            name="cities"
+            options={{
+              presentation: 'formSheet',
+              sheetAllowedDetents: [0.75, 1],
+              sheetGrabberVisible: true,
+              sheetCornerRadius: 28,
+              contentStyle: { backgroundColor: colors.canvas },
+            }}
+          />
         </Stack.Protected>
         {/* Last step of onboarding, and reachable from Profile later. */}
         <Stack.Screen name="save-progress" options={{ contentStyle: { backgroundColor: colors.card } }} />

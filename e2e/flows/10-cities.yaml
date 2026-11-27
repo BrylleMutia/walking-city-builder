@@ -1,0 +1,149 @@
+# Several cities: buy a second one, build in it from the shared pool, switch
+# back and forth, rename it, and delete it (its buildings return). Leaves the
+# player with one city again, so the flow can run repeatedly.
+appId: host.exp.exponent
+---
+- runFlow: shared/open-app.yaml
+
+# A second city costs 1,000 Wood: top up with 2 x 5,000 test steps (~1,000 Wood).
+- tapOn:
+    id: tab-profile
+- scrollUntilVisible:
+    element:
+      id: add-5000
+    direction: DOWN
+- tapOn:
+    id: add-5000
+    retryTapIfNoChange: false
+- tapOn:
+    id: add-5000
+    retryTapIfNoChange: false
+
+- tapOn:
+    id: tab-city
+
+# The town name opens the switcher.
+- tapOn:
+    id: city-switcher
+- extendedWaitUntil:
+    visible: "Your cities"
+    timeout: 5000
+- waitForAnimationToEnd
+
+# A second city left over by an interrupted run: delete it first.
+- runFlow:
+    when:
+      visible:
+        id: city-row-1
+    commands:
+      - tapOn:
+          id: city-delete-1-bin
+          retryTapIfNoChange: false
+      - waitForAnimationToEnd
+      - tapOn:
+          id: city-delete-1-confirm
+          retryTapIfNoChange: false
+      - extendedWaitUntil:
+          notVisible:
+            id: city-row-1
+          timeout: 8000
+- assertVisible:
+    id: city-row-name-0
+    text: ".*'s Town"
+- takeScreenshot: 10-sheet-one
+# Enabled once the steps above have synced and rolled their Wood.
+- extendedWaitUntil:
+    visible:
+      id: city-create
+      enabled: true
+    timeout: 20000
+- tapOn:
+    id: city-create
+    retryTapIfNoChange: false
+
+# The new city is on screen, empty.
+- extendedWaitUntil:
+    visible:
+      id: city-name
+      text: "Town 2"
+    timeout: 10000
+- assertVisible: "0 of 256 lots built"
+
+# Build something from the shared pool.
+- tapOn:
+    id: "inventory-.*"
+    index: 0
+    retryTapIfNoChange: false
+- tapOn:
+    id: city-map
+    retryTapIfNoChange: false
+- assertVisible: "[1-6] of 256 lots built"
+- waitForAnimationToEnd
+- takeScreenshot: 10-city-second
+
+# Back to the first city: its town is untouched (04 built in it).
+- tapOn:
+    id: city-switcher
+- extendedWaitUntil:
+    visible:
+      id: city-row-1
+    timeout: 5000
+- waitForAnimationToEnd
+- takeScreenshot: 10-sheet-two
+- tapOn:
+    id: city-row-0
+- extendedWaitUntil:
+    visible:
+      id: city-name
+      text: ".*'s Town"
+    timeout: 5000
+- assertVisible: "[1-9][0-9]* of 256 lots built"
+- takeScreenshot: 10-city-first
+
+# And to the second again (instant, from this phone's cache).
+- tapOn:
+    id: city-switcher
+- tapOn:
+    id: city-row-1
+- extendedWaitUntil:
+    visible:
+      id: city-name
+      text: "Town 2"
+    timeout: 5000
+- assertVisible: "[1-6] of 256 lots built"
+
+# Rename it.
+- tapOn:
+    id: city-switcher
+- tapOn:
+    id: city-rename-1
+- inputText: "Harbor Side"
+- pressKey: Enter
+- extendedWaitUntil:
+    visible:
+      id: city-row-name-1
+      text: "Harbor Side"
+    timeout: 5000
+- takeScreenshot: 10-sheet-renamed
+
+# Delete it: the first city comes back on screen and the sheet lists one city.
+- tapOn:
+    id: city-delete-1-bin
+    retryTapIfNoChange: false
+- waitForAnimationToEnd
+- tapOn:
+    id: city-delete-1-confirm
+    retryTapIfNoChange: false
+# (Not the "is gone" toast: Maestro can take longer than the toast's 4 s to settle this tap.)
+- extendedWaitUntil:
+    notVisible:
+      id: city-row-1
+    timeout: 5000
+- takeScreenshot: 10-sheet-deleted
+- tapOn:
+    id: cities-close
+- extendedWaitUntil:
+    visible:
+      id: city-name
+      text: ".*'s Town"
+    timeout: 5000
